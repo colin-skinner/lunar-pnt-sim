@@ -15,4 +15,7 @@ Plan
     - gyro.py
     - odometer.py
     - doppler.py
-  - 
+
+
+## Assumptions
+- Only moon gravity

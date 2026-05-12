@@ -4,12 +4,42 @@ import numpy as np
 from dataclasses import dataclass
 
 from .quaternion import hamilton_product
-@dataclass
+
 class RigidBodyParams:
-    mass_kg: float
-    force_N: np.ndarray | None = None
-    torque_Nm: np.ndarray  | None = None
-    I: np.ndarray | None = None
+    """Add force with add_force() or add_torque()"""
+
+    def __init__(self, mass_kg, I):
+        self.mass_kg = mass_kg
+        self.I = I
+        self.force_N = np.zeros(3)
+        self.torque_Nm   = np.zeros(3)
+
+    def add_force(self, force: np.ndarray, r: np.ndarray = None, verbose = False):
+        """Adds force in the global frame of the drone"""
+
+        if np.shape(force) != (3,):
+            raise ValueError("force must be a 3x1 vector")
+
+        if r is not None and np.shape(r) != (3,):
+            raise ValueError("r_body must be a 3x1 vector")
+
+        self.force_N += force
+
+        if r is not None:
+            torque = np.cross(r, force)
+            self.torque_Nm += torque
+
+        if verbose:
+            print(f"Rigid Body Add: {r=} {force=} {torque=}")
+
+    def add_torque(self, torque: np.ndarray):
+        """Adds force in the global frame of the drone"""
+
+        torque = np.asarray(torque)
+
+        if np.shape(torque) != (3,):
+            raise ValueError("torque must be a 3x1 vector")
+        self.torque_Nm += torque
 
 def rigid_body_derivative(t: float, state: np.ndarray, params: RigidBodyParams):
     v = state[3:6]

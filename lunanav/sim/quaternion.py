@@ -1,3 +1,4 @@
+"""Quats. Also already been tested"""
 import numpy as np
 from numpy.linalg import norm
 from ..constants import RAD_TO_DEG, DEG_TO_RAD
@@ -18,13 +19,6 @@ def hamilton_product(q: np.ndarray, w: np.ndarray | list):
     """(Schaub 3.112)"""
     qw, qx, qy, qz = q
     wx, wy, wz = w
-
-    # beta = np.array([
-    #     [-qx, -qy, -qz],
-    #     [qw, -qz, qy],
-    #     [qz, qw, -qx],
-    #     [-qy, qx, qw]
-    # ])
 
 
     prod = np.empty(4, dtype=np.float64)

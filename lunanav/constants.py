@@ -20,5 +20,5 @@ RAD_TO_ARCSEC = 1 / ARCSEC_TO_RAD
 GM_MOON = 4902.800118 
 """km^3/s^2"""
 
-R_MOON   = 1737.4 
+R_MOON = 1737.4 
 """km"""
