@@ -305,7 +305,7 @@ def debug_3d(states: np.ndarray,
         p = states[:step, 0:3]
         curr_p = p[-1]
         q = states[:step, 6:10]
-        curr_q = q[-1]
+        curr_q_B2I = q[-1]
 
         # torque = logger.actual_torques[step]
         # q_d = logger.drone_desired_quat[step]
@@ -322,9 +322,9 @@ def debug_3d(states: np.ndarray,
         
         # Coordinate system
         # plot_vec_3d(ax, curr_p, curr_p + unit(torque), 'black')
-        plot_vec_3d(ax, curr_p, curr_p + quat_apply(curr_q, [5,0,0]), 'red')
-        plot_vec_3d(ax, curr_p, curr_p + quat_apply(curr_q, [0,5,0]), 'green')
-        plot_vec_3d(ax, curr_p, curr_p + quat_apply(curr_q, [0,0,5]), 'blue')
+        plot_vec_3d(ax, curr_p, curr_p + quat_apply(curr_q_B2I, [5,0,0]), 'red')
+        plot_vec_3d(ax, curr_p, curr_p + quat_apply(curr_q_B2I, [0,5,0]), 'green')
+        plot_vec_3d(ax, curr_p, curr_p + quat_apply(curr_q_B2I, [0,0,5]), 'blue')
 
         # plot_vec_3d(ax, curr_p, curr_p + unit(quat_apply(q_d, [0.5,0,0])), 'purple')
         # plot_vec_3d(ax, curr_p, curr_p + unit(quat_apply(q_d, [0,0.5,0])), 'orange')
@@ -340,7 +340,6 @@ def debug_3d(states: np.ndarray,
         # ax.set_ylim(min(logger.actual_states[:max_step, 1] - 0.5), max(logger.actual_states[:max_step, 1]) + 0.5)
         # ax.set_zlim(min(logger.actual_states[:max_step, 2] - 0.5), max(logger.actual_states[:max_step, 2]) + 0.5)
         if limits is not None:
-            print(limits[0])
             ax.set_xlim(*limits[0])
             ax.set_ylim(*limits[1])
             ax.set_zlim(*limits[2])
@@ -350,7 +349,7 @@ def debug_3d(states: np.ndarray,
         ax.legend(["Trajectory", "Desired Trajectory", "x_axis", "y_axis", "z_axis", "x_d", "y_d", "z_d", "p_err"])
         # ax.set_aspect('equal', adjustable='box')
         # ax.axis('square')
-        plt.pause(dt)
+        plt.pause(dt/10)
 
         # if step + interval + 1 > max_step:
         #     if input("Press w to watch again:") == "w":
