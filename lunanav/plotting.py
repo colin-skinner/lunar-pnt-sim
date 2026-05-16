@@ -221,6 +221,74 @@ def plot_state_vector(
 
     figure.show()
 
+def plot_control_effort(t: np.ndarray,
+    ctrl: np.ndarray,
+    figsize=(20, 9.5),
+    time_unit="s",
+    length_unit="m",
+    *,
+    title: str = None,
+    desired_data: dict[float, tuple[float, float]] = None
+):
+
+
+
+    force = ctrl[:, 0:3]
+    torque = ctrl[:, 3:6]
+
+    ########################################
+    #             Plotting                 #
+    ########################################
+
+    figure, axs = plt.subplots(nrows=2, ncols=3, figsize=figsize)
+
+    if title is None:
+        title = "Drone States (position, velocity)"
+
+    figure.suptitle(title, fontsize=20)
+
+    fig: Axes3D = axs[0, 0]
+    fig.plot(t[:-1], force[:,0])
+    fig.set_title("X Force vs. Time")
+    fig.grid("True")
+    fig.set_ylabel(f"X ({length_unit})")
+    fig.set_xlabel(f"time ({time_unit})")
+
+    fig: Axes3D = axs[0, 1]
+    fig.plot(t[:-1], force[:,1])
+    fig.set_title("Y Force vs. Time")
+    fig.grid("True")
+    fig.set_ylabel(f"Y ({length_unit})")
+    fig.set_xlabel(f"time ({time_unit})")
+
+    fig: Axes3D = axs[0, 2]
+    fig.plot(t[:-1], force[:,2])
+    fig.set_title("Z Force vs. Time")
+    fig.grid("True")
+    fig.set_ylabel(f"Z ({length_unit})")
+    fig.set_xlabel(f"time ({time_unit})")
+
+    fig: Axes3D = axs[1, 0]
+    fig.plot(t[:-1], torque[:,0])
+    fig.set_title("X Velocity vs. Time")
+    fig.grid("True")
+    fig.set_ylabel(f"Vx ({length_unit}/{time_unit})")
+    fig.set_xlabel(f"time ({time_unit})")
+
+    fig: Axes3D = axs[1, 1]
+    fig.plot(t[:-1], torque[:,1])
+    fig.set_title("Y Velocity vs. Time")
+    fig.grid("True")
+    fig.set_ylabel(f"Vy ({length_unit}/{time_unit})")
+    fig.set_xlabel(f"time ({time_unit})")
+
+    fig: Axes3D = axs[1, 2]
+    fig.plot(t[:-1], torque[:,2])
+    fig.set_title("Z Velocity vs. Time")
+    fig.grid("True")
+    fig.set_ylabel(f"Vz ({length_unit}/{time_unit})")
+    fig.set_xlabel(f"time ({time_unit})")
+
 ########################################
 #            3D             #
 ########################################

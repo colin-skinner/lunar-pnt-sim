@@ -76,13 +76,15 @@ if __name__ == "__main__":
 
 
     jac = jax.jacfwd(rigid_body_derivative, argnums=(1,2))  # 13×13
-    # print(jac(0, log.X[-4], log.u[-4], RigidBody(5,np.eye(3))))
+    print(jac(0, log.X[-4], log.u[-4], 5,np.eye(3)))
 
     # plot_3(log.t, log.u)
 
     # Plot states
     plot_state_vector(log.t, log.X)
     plt.show()
+
+    
     
 
     # Plot in 3D

@@ -36,6 +36,9 @@ class Logger:
         for varname, value in vars.items():
             if isinstance(value, (list, tuple, np.ndarray)):
                 vars[varname] = value[:n]
+
+
+
             
     
 class Simulator:
@@ -78,7 +81,6 @@ class Simulator:
         next_state = rk4_func(0, self.dt, state, 
                               lambda t,s: rigid_body_derivative(t,s,disturbances, mass_kg, I))
         # next_state[6:10] = unit(next_state[6:10]) # to make sure quat is unitized
-        
 
         # ----- Measurements -----
         w = state[10:13] # already stored in body frame because of Euler's equations

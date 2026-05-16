@@ -32,19 +32,19 @@ def hamilton_product(q: np.ndarray, w: np.ndarray | list):
 #                                               Angle Axis                                                    #
 # =========================================================================================================== #
 
-# # ----- Quaternion and Axis rotation -----#
-# def angle_axis_to_q(angle: float, axis: np.ndarray | list, degrees = False):
+# ----- Quaternion and Axis rotation -----#
+def angle_axis_to_q(angle: float, axis: np.ndarray | list, degrees = False):
 
-#     angle_rad = angle * DEG_TO_RAD if degrees else angle
-#     unit_axis = unit(axis)
+    angle_rad = angle * DEG_TO_RAD if degrees else angle
+    unit_axis = unit(axis)
 
-#     w = np.cos(angle_rad / 2)
-#     if abs(w) < 0.1e-6:
-#         w = 0
+    w = np.cos(angle_rad / 2)
+    if abs(w) < 0.1e-6:
+        w = 0
 
-#     vector = np.sin(angle_rad / 2) * unit_axis
+    vector = np.sin(angle_rad / 2) * unit_axis
 
-#     return np.array([w, *vector])
+    return np.array([w, *vector])
 
 
 # def q_to_angle_axis(quat: np.ndarray | list, degrees = False):
