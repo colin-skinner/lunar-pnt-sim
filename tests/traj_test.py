@@ -46,7 +46,7 @@ if __name__ == "__main__":
 
     lander = RigidBody(
         mass_kg = 100,
-        I = np.diag([10,10,10])
+        I = np.eye(3)
     )
     
     dt = .1
@@ -74,7 +74,7 @@ if __name__ == "__main__":
 
     moon_offset =  np.tile([0,0,R_MOON,0,0,0,0,0,0,0,0,0,0], (n, 1))
 
-    fig = visualize_trajectory(results.states - moon_offset, None, results.torque_Nm, results.t, dt)
+    fig = visualize_trajectory(results.states - moon_offset, results.t, dt)
     fig.show()
 
     print("done?!")
