@@ -10,7 +10,7 @@ import numpy as np
 from scipy.integrate import odeint
 
 import sys
-sys.path.append("..")
+sys.path.append("../..")
 
 from lunanav.sim.math.rigid_body import rigid_body_derivative
 from lunanav.sim.math.quaternion import angle_axis_to_q, unit, quat_apply, conj

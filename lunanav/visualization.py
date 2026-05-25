@@ -37,28 +37,47 @@ def add_solid_trajectory(r, color='red'):
         name='Solid Trajectory'  # Name for solid trajectory
     )
 
-def get_body_axes(r, q, axis_size):
-    """Returns go.Scatter3d traces for body axes based on current position and orientation."""
+
+def draw_vectors(r, q, names, vectors, colors, scale=1.0):
+    """Draw vectors from a specified position according to the given orientation (quaternion)."""
     traces = []
-    for i, (name, color, vec) in enumerate([('X-axis', x_axis_color, [1, 0, 0]),
-                                             ('Y-axis', y_axis_color, [0, 1, 0]),
-                                             ('Z-axis', z_axis_color, [0, 0, 1])]):
-        axis = quat_apply(q, vec) * axis_size
+    for name, vec, color in zip(names, vectors, colors):
+        # Transform the vector using the orientation defined by the quaternion
+        transformed_vector = quat_apply(q, vec) * scale  # Scale the vector length
+        
+        # Create the line trace for the vector
         traces.append(go.Scatter3d(
-            x=[r[0], r[0] + axis[0]],
-            y=[r[1], r[1] + axis[1]],
-            z=[r[2], r[2] + axis[2]],
-            mode='lines', line=dict(color=color, width=3),
-            name=name, hoverinfo='skip'
+            x=[r[0], r[0] + transformed_vector[0]], 
+            y=[r[1], r[1] + transformed_vector[1]], 
+            z=[r[2], r[2] + transformed_vector[2]], 
+            mode='lines',
+            line=dict(color=color, width=3),  # You can adjust the width and color
+            name=name,hoverinfo='skip'
         ))
     return traces
+
+def get_body_axes(r, q, axis_size, plot_body_axes=True):
+    """Returns go.Scatter3d traces for body axes based on current position and orientation."""
+    if not plot_body_axes:
+        return []
+    return draw_vectors(
+        r,q,
+        names=['X-axis', 'Y-axis', 'Z-axis'],
+        vectors=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        colors=[x_axis_color, y_axis_color, z_axis_color],
+        scale=axis_size
+    )
+
 
 def visualize_trajectory(
     states: np.ndarray,
     t: np.ndarray = None,
     dt: float = 0.1,
     axis_scale: float = 1000.0,
-    title: str = "Lunar Descent Trajectory"
+    * , 
+    title: str = "Lunar Descent Trajectory",
+    other_vecs: dict = None,
+    plot_body_axes: bool = True
 ):
     """
     Simple interactive 3D trajectory visualizer.
@@ -104,19 +123,27 @@ def visualize_trajectory(
     # Body axes setup 
     traj_scale = np.max(np.linalg.norm(r - r[0], axis=1))  # max distance from start
     axis_size = min(axis_scale, traj_scale * 0.1)  # 10% of trajectory extent or user-specified
-    fig.add_traces(get_body_axes(r[0], q[0], axis_size))
+    fig.add_traces(get_body_axes(r[0], q[0], axis_size, plot_body_axes=plot_body_axes))  # Initial body axes
+
+    # Other vectors (e.g., velocity, acceleration) if provided
+    if other_vecs is not None:
+        names, vecs, colors, vec_scale = other_vecs["names"], other_vecs["vecs"], other_vecs["colors"], other_vecs.get("scale", 1e3)
+        fig.add_traces(draw_vectors(r[0], q[0], names, vecs, colors, scale=vec_scale))
 
     # Animation frames
     frames = []
     for step in range(n_steps):
         pos = r[step]
+        q_curr = q[step]
         frame_data = [
             moon_surface_trace,
             add_lander(r[step]),
             traj,  # Include the gradient trajectory
             solid_traj,  # Add solid trajectory
-            *get_body_axes(r[step], q[step], axis_size)  # Include body axes for the current state
+            *get_body_axes(pos, q_curr, axis_size, plot_body_axes=plot_body_axes),  # Include body axes for the current state
         ]
+        if other_vecs is not None:
+            frame_data += draw_vectors(pos, q_curr, names, vecs, colors, scale=vec_scale)  # Add other vectors if they exist
         frames.append(go.Frame(data=frame_data, name=str(step)))  # Append the frame data
     fig.frames = frames
 
@@ -126,6 +153,26 @@ def visualize_trajectory(
                 'steps': [{'args': [[str(i)], {'frame': {'duration': 0, 'redraw': True}, 'mode': 'immediate'}],
                            'method': 'animate', 'label': f'{t[i]:.1f}'} for i in range(n_steps)]
     }]
+
+    # Adding Play/Pause buttons
+    fig.update_layout(
+        updatemenus=[{
+            'buttons': [
+                {'args': [None, {'frame': {'duration': 100, 'redraw': True}, 'mode': 'immediate'}],
+                'label': 'Play', 'method': 'animate'},
+                {'args': [[None], {'frame': {'duration': 0}, 'mode': 'immediate'}],
+                'label': 'Pause', 'method': 'animate'}
+            ],
+            'direction': 'left',
+            'pad': {'r': 10, 't': 87},
+            'showactive': True,
+            'type': 'buttons',
+            'x': 0.1,
+            'xanchor': 'right',
+            'y': 0,
+            'yanchor': 'top'
+        }]
+    )
     
     # Auto-scale to the maximum trajectory extent
     x_min, x_max = np.min(r[:, 0]), np.max(r[:, 0])
@@ -151,27 +198,27 @@ def visualize_trajectory(
         zaxis_title='Z (m)',
         xaxis=dict(
             range=x_range,
-            gridcolor='rgba(255, 255, 255, 0.1)',  # Color of the grid lines
-            zerolinecolor='rgba(255, 255, 255, 0.3)',  # Color of the zero line on x-axis
-            titlefont=dict(color='white'),  # Title font color for x-axis
-            tickfont=dict(color='white'),  # Tick font color for x-axis
-            linecolor='white'  # Color of the x-axis line
+            # gridcolor='rgba(255, 255, 255, 0.1)',  # Color of the grid lines
+            # zerolinecolor='rgba(255, 255, 255, 0.3)',  # Color of the zero line on x-axis
+            # titlefont=dict(color='white'),  # Title font color for x-axis
+            # tickfont=dict(color='white'),  # Tick font color for x-axis
+            # linecolor='white'  # Color of the x-axis line
         ),
         yaxis=dict(
             range=y_range,
-            gridcolor='rgba(255, 255, 255, 0.1)',  # Color of the grid lines
-            zerolinecolor='rgba(255, 255, 255, 0.3)',  # Color of the zero line on y-axis
-            titlefont=dict(color='white'),  # Title font color for y-axis
-            tickfont=dict(color='white'),  # Tick font color for y-axis
-            linecolor='white'  # Color of the y-axis line
+            # gridcolor='rgba(255, 255, 255, 0.1)',  # Color of the grid lines
+            # zerolinecolor='rgba(255, 255, 255, 0.3)',  # Color of the zero line on y-axis
+            # titlefont=dict(color='white'),  # Title font color for y-axis
+            # tickfont=dict(color='white'),  # Tick font color for y-axis
+            # linecolor='white'  # Color of the y-axis line
         ),
         zaxis=dict(
             range=z_range,
-            gridcolor='rgba(255, 255, 255, 0.1)',  # Color of the grid lines
-            zerolinecolor='rgba(255, 255, 255, 0.3)',  # Color of the zero line on z-axis
-            titlefont=dict(color='white'),  # Title font color for z-axis
-            tickfont=dict(color='white'),  # Tick font color for z-axis
-            linecolor='white'  # Color of the z-axis line
+            # gridcolor='rgba(255, 255, 255, 0.1)',  # Color of the grid lines
+            # zerolinecolor='rgba(255, 255, 255, 0.3)',  # Color of the zero line on z-axis
+            # titlefont=dict(color='white'),  # Title font color for z-axis
+            # tickfont=dict(color='white'),  # Tick font color for z-axis
+            # linecolor='white'  # Color of the z-axis line
         ),
         aspectmode='cube',  # Ensure equal scaling for all axes
         # bgcolor='rgb(0, 0, 0, 1)',  # Set scene background to black
@@ -183,7 +230,7 @@ def visualize_trajectory(
         scene=scene_layout,
         width=1200, height=800,
         sliders=sliders,
-        showlegend=True, hovermode='closest',
+        showlegend=True, hovermode='closest'
     )
 
     return fig
