@@ -14,8 +14,6 @@ def visualize_trajectory(
     dt: float = 0.1,
     force: np.ndarray = None,
     axis_scale: float = 1000.0,
-    moon_radius: float = R_MOON,
-    initial_altitude: float = 10e3,
     title: str = "Lunar Descent Trajectory"
 ):
     """
@@ -44,77 +42,64 @@ def visualize_trajectory(
     fig = go.Figure()
     
     # Moon surface
-    moon_z = initial_altitude - moon_radius
     xx, yy = np.meshgrid(np.linspace(-10000, 10000, 5), np.linspace(-10000, 10000, 5))
-    zz = np.full_like(xx, moon_z)
+    zz = np.full_like(xx, r[0, 2])  # Use the initial altitude
     fig.add_trace(go.Surface(x=xx, y=yy, z=zz, colorscale=[[0, '#333333'], [1, '#555555']], 
                              showscale=False, name='Moon', hoverinfo='skip'))
-    
-    # Trajectory colored by time (only for visualization purpose)
-    fig.add_trace(go.Scatter3d(
-        x=r[:, 0], y=r[:, 1], z=r[:, 2],
-        mode='lines',
-        line=dict(color=t, colorscale='Viridis', width=3, showscale=False)  # Keep this to visualize in play
-    ))
-    
-    # # Force vectors (if provided)
-    # if force is not None:
-    #     force_interval = max(1, n_steps // 15)
-    #     for idx in range(0, n_steps, force_interval):
-    #         f = force[idx]
-    #         f_mag = np.linalg.norm(f)
-    #         if f_mag > 1:
-    #             f_norm = f / f_mag * 500  # fixed scale for visibility
-    #             pos = r[idx]
-    #             fig.add_trace(go.Scatter3d(
-    #                 x=[pos[0], pos[0] + f_norm[0]],
-    #                 y=[pos[1], pos[1] + f_norm[1]],
-    #                 z=[pos[2], pos[2] + f_norm[2]],
-    #                 mode='lines', line=dict(color='orange', width=2),
-    #                 name='Force' if idx == 0 else '', showlegend=(idx == 0), hoverinfo='skip'
-    #             ))
-    
+
     # Lander marker
     fig.add_trace(go.Scatter3d(x=[r[0, 0]], y=[r[0, 1]], z=[r[0, 2]],
                                mode='markers', marker=dict(size=6, color='black'),
                                name='Lander', hoverinfo='skip'))
+
+    # Trajectory colored by time
+    fig.add_trace(go.Scatter3d(
+        x=r[:, 0], y=r[:, 1], z=r[:, 2],
+        mode='lines',
+        line=dict(color=t, colorscale='Viridis', width=3, showscale=False),
+        name='Trajectory'  # Name for trajectory
+    ))
     
     # Body axes (scaled by overall trajectory size, not current state)
     traj_scale = np.max(np.linalg.norm(r - r[0], axis=1))  # max distance from start
     axis_size = min(axis_scale, traj_scale * 0.1)  # 10% of trajectory extent, or user-specified, whichever is smaller
     
-    for i, (name, color, vec) in enumerate([('X', x_axis_color, [1, 0, 0]), ('Y', y_axis_color, [0, 1, 0]), ('Z', z_axis_color, [0, 0, 1])]):
+    # Add body axes as initial state
+    for i, (name, color, vec) in enumerate([('X-axis', x_axis_color, [1, 0, 0]), 
+                                             ('Y-axis', y_axis_color, [0, 1, 0]), 
+                                             ('Z-axis', z_axis_color, [0, 0, 1])]):
         axis = quat_apply(q[0], vec) * axis_size
         fig.add_trace(go.Scatter3d(
             x=[r[0, 0], r[0, 0] + axis[0]],
             y=[r[0, 1], r[0, 1] + axis[1]],
             z=[r[0, 2], r[0, 2] + axis[2]],
             mode='lines', line=dict(color=color, width=3),
-            name=f'{name}-axis', hoverinfo='skip'
+            name=name, hoverinfo='skip'
         ))
-    
+
     # Animation frames
     frames = []
     for step in range(n_steps):
         pos = r[step]
-        frame_data = [go.Scatter3d(x=[pos[0]], y=[pos[1]], z=[pos[2]],
-                                    mode='markers', marker=dict(size=6, color='black'))]
+
+        frame_data = [go.Surface(x=xx, y=yy, z=zz, colorscale=[[0, '#333333'], [1, '#555555']],showscale=False, name='Moon', hoverinfo='skip'),
+                      go.Scatter3d(x=[pos[0]], y=[pos[1]], z=[pos[2]],mode='markers', name="Lander", marker=dict(size=6, color='black'))]
 
         # Add the colored trajectory to each frame
         frame_data.append(go.Scatter3d(x=r[:, 0], y=r[:, 1], z=r[:, 2],
-                                        mode='lines', line=dict(color=t, colorscale='Viridis', width=3, showscale=False)))
+                                        mode='lines', name="Trajectory", line=dict(color=t, colorscale='Viridis', width=3, showscale=False)))
 
         # Only add current body axes for the current state
         for vec, color, name in zip([[1, 0, 0], [0, 1, 0], [0, 0, 1]], 
                                     [x_axis_color, y_axis_color, z_axis_color], 
                                     ['X-axis', 'Y-axis', 'Z-axis']):
-            axis = quat_apply(q[step], vec) * axis_scale
+            axis = quat_apply(q[step], vec) * axis_size
             frame_data.append(go.Scatter3d(
                 x=[pos[0], pos[0] + axis[0]],
                 y=[pos[1], pos[1] + axis[1]],
                 z=[pos[2], pos[2] + axis[2]],
                 mode='lines', line=dict(color=color, width=3),
-                name=f'{name}', hoverinfo='skip'
+                name=name, hoverinfo='skip'
             ))
 
         frames.append(go.Frame(data=frame_data, name=str(step)))  # no layout at all
@@ -139,12 +124,12 @@ def visualize_trajectory(
     max_range = max(x_max - x_min, y_max - y_min, z_max - z_min)  # Find the maximum range across axes
 
     # Padding factor
-    pad = max_range/2 * 1.2
+    pad = max_range / 2 * 1.2
     x_range = [x_middle - pad, x_middle + pad]
     y_range = [y_middle - pad, y_middle + pad]
     z_range = [z_middle - pad, z_middle + pad]
 
-    # Fix the scene axes for all frames (update this section)
+    # Fix the scene axes for all frames
     scene_layout = dict(
         xaxis_title='X (m)', yaxis_title='Y (m)', zaxis_title='Z (m)',
         xaxis=dict(range=x_range), 
@@ -161,5 +146,5 @@ def visualize_trajectory(
         sliders=sliders,
         showlegend=True, hovermode='closest'
     )
-    
+
     return fig
