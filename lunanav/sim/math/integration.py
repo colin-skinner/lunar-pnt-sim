@@ -1,6 +1,9 @@
 import numpy as np
 from typing import Callable
 
+import jax
+
+# @jax.jit
 def rk4_func(
     t: float, dt: float, x_prev: float, x_dot: Callable[[float, np.ndarray], np.ndarray]):
 

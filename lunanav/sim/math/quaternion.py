@@ -1,20 +1,21 @@
 """Quats. Also already been tested"""
 import numpy as np
-from numpy.linalg import norm
-from ..constants import RAD_TO_DEG, DEG_TO_RAD
+from jax.numpy.linalg import norm
+from ...constants import RAD_TO_DEG, DEG_TO_RAD
 import jax.numpy as jnp
+import jax
 
-def unit(q: np.ndarray):
-    q_norm = norm(q)
-    if abs(q_norm) < 0.000001:
-        return np.zeros(len(q))
+@jax.jit
+def unit(q: jnp.ndarray):
+    q_norm = norm(jnp.asarray(q))
+    return jnp.where(q_norm < 0.000001, jnp.zeros(len(q)), jnp.asarray(q) / q_norm)
 
-    return q / q_norm
-
-def conj(q: np.ndarray):
+@jax.jit
+def conj(q: jnp.ndarray):
     return jnp.array([q[0], -q[1], -q[2], -q[3]])
 
-def hamilton_product(q: np.ndarray, w: np.ndarray | list):
+@jax.jit
+def hamilton_product(q: jnp.ndarray, w: jnp.ndarray | list):
     """(Schaub 3.112)"""
     qw, qx, qy, qz = q
     wx, wy, wz = w
@@ -33,18 +34,19 @@ def hamilton_product(q: np.ndarray, w: np.ndarray | list):
 # =========================================================================================================== #
 
 # ----- Quaternion and Axis rotation -----#
-def angle_axis_to_q(angle: float, axis: np.ndarray | list, degrees = False):
+@jax.jit
+def angle_axis_to_q(angle: float, axis: jnp.ndarray | list, degrees = False):
 
-    angle_rad = angle * DEG_TO_RAD if degrees else angle
+    angle_rad = jnp.where(degrees, angle * DEG_TO_RAD, angle)
     unit_axis = unit(axis)
 
-    w = np.cos(angle_rad / 2)
-    if abs(w) < 0.1e-6:
-        w = 0
+    w = jnp.cos(angle_rad / 2)
 
-    vector = np.sin(angle_rad / 2) * unit_axis
+    w = jnp.where(abs(w) < 0.1e-6, 0, w)
 
-    return np.array([w, *vector])
+    vector = jnp.sin(angle_rad / 2) * unit_axis
+
+    return jnp.array([w, *vector])
 
 
 # def q_to_angle_axis(quat: np.ndarray | list, degrees = False):
@@ -126,7 +128,8 @@ def angle_axis_to_q(angle: float, axis: np.ndarray | list, degrees = False):
 
 
 # ----- Quaternion math! -----#
-def mul(q1: np.ndarray, q2: np.ndarray):
+@jax.jit
+def mul(q1: jnp.ndarray, q2: jnp.ndarray):
 
     w1, x1, y1, z1 = q1
     w2, x2, y2, z2 = q2
@@ -141,10 +144,11 @@ def mul(q1: np.ndarray, q2: np.ndarray):
     )
 
 # ----- Applies Quaternion to Vector -----#
-def quat_apply(quat: np.ndarray, v: np.ndarray, passive=True):
+@jax.jit
+def quat_apply(quat: jnp.ndarray, v: jnp.ndarray, passive=True):
 
     quat = unit(quat)
-    v_quat = np.hstack(([0],v))
+    v_quat = jnp.array([0,*v])
 
     if passive:   
 
@@ -156,12 +160,12 @@ def quat_apply(quat: np.ndarray, v: np.ndarray, passive=True):
             mul(conj(quat), v_quat),
             quat)
 
-    if abs(result[0]) > 0.0001:
-        print(f"Quanternion is not normalized. Result vector of {result}")
+    # if abs(result[0]) > 0.0001:
+    #     print(f"Quanternion is not normalized. Result vector of {result}")
 
     # Discards
     return result[1:4]
-
+    
 # =========================================================================================================== #
 #                                                   Angles                                                    #
 # =========================================================================================================== #

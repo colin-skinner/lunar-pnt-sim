@@ -1,32 +1,22 @@
 import numpy as np
-from numpy.linalg import norm
-from dataclasses import dataclass
+from jax.numpy.linalg import norm
+from dataclasses import dataclass, field
+import jax.numpy as jnp
+import jax
 
-from .rigid_body import rigid_body_derivative, RigidBody
-from .integrators import rk4_func
-from .quaternion import unit, quat_apply, conj
+from .math.rigid_body import rigid_body_derivative, RigidBody
+from .math.integration import rk4_func
+from .math.quaternion import unit, quat_apply, conj
+from .sensors import Accelerometer, Gyroscope
 
 from ..constants import GM_MOON, R_MOON
 
-# `from ..entities import Spacecraft
-# from ..math import rk4_func, quat_apply, unit
-# from ..physics.rigid_body import rigid_body_derivative, RigidBodyParams
-# from ..physics import grav_accel
-# from ..world import MU_EARTH
-# from ..physics.energy import calc_potential_energy, calc_kinetic_energy`
-@dataclass
-class Measurements:
-    accel_m_s2: np.ndarray
-    """3"""
-    gyro_rad_s2: np.ndarray
-    """3"""
-
-class Logger:
+class SimResults:
     def __init__(self, n_steps):
         self.t: np.ndarray = np.zeros(n_steps)
-        self.X: np.ndarray = np.zeros((n_steps, 13))
+        self.states: np.ndarray = np.zeros((n_steps, 13))
         self.u: np.ndarray = np.zeros((n_steps, 6))
-        self.accel_m_s2: np.ndarray = np.zeros((n_steps, 3))
+        self.force_N: np.ndarray = np.zeros((n_steps, 3))
         self.torque_Nm: np.ndarray = np.zeros((n_steps, 3))
         self.a_meas: np.ndarray = np.zeros((n_steps, 3))
         self.w_meas: np.ndarray = np.zeros((n_steps, 3))
@@ -34,94 +24,114 @@ class Logger:
     def trunc(self, n):
         vars = self.__dict__
         for varname, value in vars.items():
-            if isinstance(value, (list, tuple, np.ndarray)):
+            if isinstance(value, (np.ndarray)):
                 vars[varname] = value[:n]
-
-
-
+            else:
+                raise ValueError(f"Should only have np.ndarray fields, but {varname} is {type(value)}")
             
-    
-class Simulator:
-    def __init__(self, state0: np.ndarray, t0: float, dt: float, n_steps: float):
-
-        self.dt = dt
-        self.n_steps = n_steps
-
-        self.log = Logger(n_steps)
-        self.log.X[0] = state0
-        self.log.t[0] = t0
-
-    # ----------------------------------------------------------------------
-    #                       Forces and torques
-    # ----------------------------------------------------------------------
-
-    def timestep(self, t_curr: float, state: np.ndarray, mass_kg: float, I: np.ndarray, control_fn):
-        """Return false if simulation is done"""
-
-        force_N = np.zeros(3)
-        torque_Nm = np.zeros(3)
-
-        r = state[:3]
-        g_moon = -GM_MOON/(norm(r)**3) * r
-        force_N += g_moon * mass_kg
-
-        # ----- Next state -----
-        disturbances = np.concatenate([force_N, torque_Nm])
+        self.nsteps = n
 
 
-        # TODO: DEAL WITH ROTATION HERE AND MEASUREMENT
+@dataclass
+class SimParams:
 
-        # Returns body forces exerted by the spacecraft (NON gravity)
-        if control_fn is not None:
-            specific_force = control_fn(t_curr, state)
-        else:
-            specific_force = np.zeros(3)
+    """Simulation parameters. Mass in kg and I in kg•m2"""
+    state0: float
+    body: RigidBody = field(default_factory=RigidBody)
+    dt: float = 0.1  # time step (seconds)
+    t_end: float = 100.0  # max simulation time
 
-        disturbances += specific_force
-        next_state = rk4_func(0, self.dt, state, 
-                              lambda t,s: rigid_body_derivative(t,s,disturbances, mass_kg, I))
-        # next_state[6:10] = unit(next_state[6:10]) # to make sure quat is unitized
+####################################################################################################
+#                                       O
+####################################################################################################
 
-        # ----- Measurements -----
-        w = state[10:13] # already stored in body frame because of Euler's equations
-        q_B2I = unit(state[6:10]) # Turns body vector into inertial vector
-        a_body = quat_apply(conj(q_B2I), specific_force[0:3] / mass_kg)
+def propagate(state, force_body, torque_body, params: SimParams, mu: float = GM_MOON):
+    """
+    Propagate the state of the rigid body forward in time.
 
+    Parameters
+    ----------
+    state : jnp.ndarray (13,)
+        Initial state vector [r, v, q, w]
+    force : jnp.ndarray (3,)
+        Force acting on the body (in body frame) `[N]`
+    torque : jnp.ndarray (3,)
+        Torque acting on the body (in body frame) `[Nm]`
+    params : SimParams
+    mu : float, optional
+        Gravitational parameter (GM) of the central body `[m3/s2]`. If 0, no gravity forces are applied.
+
+    Returns
+    -------
+    jnp.ndarray
+        Next state vector [r, v, q, w]
+    """
+
+    q_B2L = state[6:10]
+    force = quat_apply(q_B2L, force_body) # body force --> inertial force
+
+
+    if mu > 0:
+        r = state[0:3]
+        force += -mu * r / norm(r)**3
+
+
+    def state_dot(t, s):
+        return rigid_body_derivative(t, s, force, torque_body, params.body.mass_kg, params.body.I)
+
+    return rk4_func(0, params.dt, state, state_dot)
+
+def run_sim(state0, nsteps, dt, control_fn, params: SimParams):
+    """Run the simulation forward in time.
+
+    Parameters
+    ----------
+    state0 : jnp.ndarray (13,)
+        Initial state vector [r, v, q, w]
+    tmax : float
+        Maximum simulation time
+    dt : float
+        Time step for integration
+    control_fn : function
+        Control function that takes in (t, state) and outputs (force_body, torque_body)
+    params : SimParams
+
+    Returns
+    -------
+    SimLogger
+        Logger containing the history of states and controls.
+    """
+
+    final_step = nsteps # for when the sim ends and we truncate
+    logger = SimResults(nsteps)
+
+    if norm(state0[0:3]) < 1e-3:
+        raise ValueError("Initial position is [0,0,0]")
+    logger.states[0] = state0
+
+    final_step = nsteps
+    for step in range(nsteps-1):
+        t_curr = logger.t[step]
+        state = logger.states[step]
+
+        force_body, torque_body = control_fn(t_curr, state)
+        logger.force_N[step] = force_body
+        logger.torque_Nm[step] = torque_body
+
+
+        logger.states[step+1] = propagate(state, force_body, torque_body, params)
+        logger.t[step+1] = logger.t[step] + dt
+
+        if norm(logger.states[step+1,0:3]) < R_MOON:
+            print("Crashed into moon")
+            final_step = step
+            break
+
+        # Measurements
+        # logger.u[i] = np.concatenate([force_body, torque_body])
+        # logger.accel_m_s2[i] = force_body / params.body.mass_kg
+        # logger.torque_Nm[i] = torque_body
         
-        
-        return next_state, disturbances, Measurements(a_body, w)
+    logger.trunc(final_step)
 
-    def simulate(self, control_fn = None):
-
-        self.final_step = self.n_steps
-
-        mass_kg = 20 # kg
-        I = np.eye(3) # kg*m^2
-
-        t = self.log.t
-        X = self.log.X
-        
-        for step in range(self.n_steps-1):
-
-            t_curr = t[step]
-            next_step, control, meas = self.timestep(t_curr, X[step], mass_kg, I, control_fn)
-            self.log.u[step] = control
-            self.log.a_meas[step] = meas.accel_m_s2
-            self.log.w_meas[step] = meas.gyro_rad_s2
-
-            t[step+1] = t[step] + self.dt
-            X[step+1] = next_step
-
-            if norm(X[step+1,:]) < R_MOON:
-                print("Crashed into moon")
-                self.final_step = step
-                break
-        
-        print(f"Sim stopped at step {step} / time {t[-1]:.2f}") # screw variable scoping
-        self.final_step = step 
-
-        self.log.trunc(self.final_step)
-
-
-
-    
+    return logger

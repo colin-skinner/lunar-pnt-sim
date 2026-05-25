@@ -12,9 +12,9 @@ from scipy.integrate import odeint
 import sys
 sys.path.append("..")
 
-from lunanav.sim.rigid_body import rigid_body_derivative
-from lunanav.sim.quaternion import angle_axis_to_q
-from lunanav.plotting import plot_state_vector, debug_3d, plot_control_effort
+from lunanav.sim.math.rigid_body import rigid_body_derivative
+from lunanav.sim.math.quaternion import angle_axis_to_q, unit, quat_apply, conj
+from lunanav.plotting import plot_state_vector, debug_3d, plot_control_effort, plot_4
 from lunanav.constants import GM_MOON, R_MOON
 
 def linearize(f, s, u):
@@ -94,10 +94,20 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
     # Initialize the nominal trajectory `(s_bar, u_bar`), and the
     # deviations `(ds, du)`
     u_bar = np.zeros((N, m))
+
     s_bar = np.zeros((N + 1, n))
     s_bar[0] = s0
     for k in range(N):
         s_bar[k + 1] = f(s_bar[k], u_bar[k])
+
+        x = s_bar[k + 1]
+        if k % 50 == 0:
+            print(f"Step {k}: pos={x[0:3]}, vel={x[3:6]}, q={x[6:10]}, angvel={x[10:13]}")
+        
+        if np.any(np.isnan(x)) or np.any(np.abs(x) > 1e10):
+            print(f"Diverged at step {k}")
+            break
+
     ds = np.zeros((N + 1, n))
     du = np.zeros((N, m))
 
@@ -127,6 +137,10 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
             H_xu = A[k].T @ P[k+1] @ B[k]
             H_xx = Q + A[k].T @ P[k+1] @ A[k]
             H_uu = R + B[k].T @ P[k+1] @ B[k]
+            # print(B[k])
+            # print(P[k+1])
+            # breakpoint
+            H_uu = R + B[k].T @ P[k+1] @ B[k]
 
             q_k = Q @ (s_bar[k] - s_goal) # From part (b)
             r_k = R @ u_bar[k] # From part (b)
@@ -134,7 +148,18 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
             h_x = q_k + A[k].T @ p[k+1]
             h_u = r_k + B[k].T @ p[k+1]
 
-            Y[k] = -np.linalg.pinv(H_uu) @ H_xu.T
+            
+
+            try:
+                Y[k] = -np.linalg.pinv(H_uu) @ H_xu.T
+            except np.linalg.LinAlgError:
+                # print(B[4])
+                # print(B[k-1])
+                print(B[k])
+                # print(P[k])
+                print(P[k+1])
+                print(k)
+                breakpoint()
             y[k] = -np.linalg.pinv(H_uu) @ h_u
             
             P[k] = H_xx + H_xu @ Y[k]
@@ -174,7 +199,7 @@ def get_costs():
 
     # Input weights — penalize fuel use / aggressive control
     R = np.diag([
-        1e-4, 1e-4, 1e-4,    # force (N) — low to allow control authority
+        1e-2, 1e-2, 1e-4,    # force (N) — low to allow control authority
         1e-2, 1e-2, 1e-2,    # torque (N·m) — moderate
     ])
 
@@ -197,8 +222,9 @@ if __name__ == "__main__":
     dt = 0.1  # sampling time
 
     # Spacecraft
-    mass = 5 # kg
+    mass = 0.5 # kg
     I = 5 * np.eye(3)
+    I_inv = jnp.linalg.pinv(I)
 
 
     r = R_MOON + 15 # GEO
@@ -208,7 +234,8 @@ if __name__ == "__main__":
     s0 = np.array([
     1000,2000, r, 
     0 ,1000, 0,
-    *angle_axis_to_q(90, [1,0,0], True),
+    1,0,0,0,
+    # *angle_axis_to_q(90, [1,0,0], True),
     0,0,0])
 
     print(f"Initial state: {s0}")
@@ -220,10 +247,14 @@ if __name__ == "__main__":
         1,0,0,0,
         0,0,0])
     
-    # Initialize continuous-time and discretized dynamics
+    # Initialize continuous-time and discretized dynamics 
+    # input: force_inertial, torque_body
     # t: float, state: jnp.ndarray, disturbances: jnp.ndarray, mass_kg: float, I: np.ndarray):
+    @jax.jit
     def deriv_wrapper(s, u):
-        return rigid_body_derivative(0, s, u, mass, I)
+        q_B2I = unit(s[6:10])
+        u_better = jnp.concatenate((quat_apply(q_B2I, u[0:3]), u[3:6]))
+        return rigid_body_derivative(0, s, u_better, mass, I, I_inv)
         
     f = jax.jit(deriv_wrapper)
     fd = jax.jit(lambda s, u, dt=dt: s + dt * f(s, u))
@@ -254,6 +285,8 @@ if __name__ == "__main__":
 
     plot_state_vector(t, s)
     plt.show(block=False)
+    plot_4(t, s[:,6:10])
+    plt.show(block=False)
     plot_control_effort(t, u)
     plt.show()
 
@@ -266,5 +299,6 @@ if __name__ == "__main__":
         [min(y), max(y)],
         [min(z), max(z)]
     ])
+    
 
     debug_3d(s, t, dt, limits=limits)
