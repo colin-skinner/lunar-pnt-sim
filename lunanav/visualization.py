@@ -13,25 +13,27 @@ def moon_surface(xx, yy, zz):
     return go.Surface(x=xx, y=yy, z=zz, colorscale=[[0, '#333333'], [1, '#555555']],
                              showscale=False, name='Moon', hoverinfo='skip')
 
-def add_lander(position):
+def add_lander(position, show_lander=True):
     """Add lander marker to the figure."""
+    if not show_lander:
+        return []
     return go.Scatter3d(x=[position[0]], y=[position[1]], z=[position[2]],
                                  mode='markers', marker=dict(size=6, color='black'),
                                  name='Lander', hoverinfo='skip')
 
-def add_gradient_trajectory(r, t, colorscale='Viridis'):
+def add_gradient_trajectory(r, t, colorscale='Viridis', downsample_rate=5):
     """Return go.Scatter3d of trajectory colored by time."""
     return go.Scatter3d(
-        x=r[:, 0], y=r[:, 1], z=r[:, 2],
+        x=r[::downsample_rate, 0], y=r[::downsample_rate, 1], z=r[::downsample_rate, 2],
         mode='lines',
         line=dict(color=t, colorscale=colorscale, width=3, showscale=False),
         name='Trajectory'  # Name for trajectory
     )
 
-def add_solid_trajectory(r, color='red'):
+def add_solid_trajectory(r, color='red', downsample_rate=5):
     """Return go.Scatter3d of trajectory colored by time."""
     return go.Scatter3d(
-        x=r[:, 0], y=r[:, 1], z=r[:, 2],
+        x=r[::downsample_rate, 0], y=r[::downsample_rate, 1], z=r[::downsample_rate, 2],
         mode='lines',
         line=dict(color=color, width=2, showscale=False),
         name='Solid Trajectory'  # Name for solid trajectory
@@ -56,9 +58,9 @@ def draw_vectors(r, q, names, vectors, colors, scale=1.0):
         ))
     return traces
 
-def get_body_axes(r, q, axis_size, plot_body_axes=True):
+def get_body_axes(r, q, axis_size, show_body_axes=True):
     """Returns go.Scatter3d traces for body axes based on current position and orientation."""
-    if not plot_body_axes:
+    if not show_body_axes:
         return []
     return draw_vectors(
         r,q,
@@ -77,7 +79,9 @@ def visualize_trajectory(
     * , 
     title: str = "Lunar Descent Trajectory",
     other_vecs: dict = None,
-    plot_body_axes: bool = True
+    show_body_axes: bool = True,
+    show_lander: bool = True,
+    downsample_rate: int = 5  # For downsampling the number of plotted frames
 ):
     """
     Simple interactive 3D trajectory visualizer.
@@ -110,20 +114,20 @@ def visualize_trajectory(
     fig.add_trace(moon_surface_trace)
 
     # Lander marker
-    fig.add_trace(add_lander(r[0]))
+    fig.add_trace(add_lander(r[0], show_lander=show_lander))
 
-    # Trajectory colored by time
-    traj = add_gradient_trajectory(r, t)
-    fig.add_trace(traj)
+    # # Trajectory colored by time
+    # traj = add_gradient_trajectory(r, t, downsample_rate=downsample_rate)
+    # fig.add_trace(traj)
     
     # Solid trajectory for visibility
-    solid_traj = add_solid_trajectory(r, color='gold')  # Solid gold trajectory
+    solid_traj = add_solid_trajectory(r, color='gold', downsample_rate=downsample_rate)  # Solid gold trajectory
     fig.add_trace(solid_traj)
 
     # Body axes setup 
     traj_scale = np.max(np.linalg.norm(r - r[0], axis=1))  # max distance from start
     axis_size = min(axis_scale, traj_scale * 0.1)  # 10% of trajectory extent or user-specified
-    fig.add_traces(get_body_axes(r[0], q[0], axis_size, plot_body_axes=plot_body_axes))  # Initial body axes
+    fig.add_traces(get_body_axes(r[0], q[0], axis_size, show_body_axes=show_body_axes))  # Initial body axes
 
     # Other vectors (e.g., velocity, acceleration) if provided
     if other_vecs is not None:
@@ -132,15 +136,15 @@ def visualize_trajectory(
 
     # Animation frames
     frames = []
-    for step in range(n_steps):
+    for step in range(0, n_steps, downsample_rate):
         pos = r[step]
         q_curr = q[step]
         frame_data = [
             moon_surface_trace,
-            add_lander(r[step]),
-            traj,  # Include the gradient trajectory
+            add_lander(r[step], show_lander=show_lander),
+            # traj,  # Include the gradient trajectory
             solid_traj,  # Add solid trajectory
-            *get_body_axes(pos, q_curr, axis_size, plot_body_axes=plot_body_axes),  # Include body axes for the current state
+            *get_body_axes(pos, q_curr, axis_size, show_body_axes=show_body_axes),  # Include body axes for the current state
         ]
         if other_vecs is not None:
             frame_data += draw_vectors(pos, q_curr, names, vecs, colors, scale=vec_scale)  # Add other vectors if they exist
@@ -226,7 +230,7 @@ def visualize_trajectory(
     )
 
     fig.update_layout(
-        title=f'{title}<br>t = {t[0]:.2f}s',
+        title=title,
         scene=scene_layout,
         width=1200, height=800,
         sliders=sliders,

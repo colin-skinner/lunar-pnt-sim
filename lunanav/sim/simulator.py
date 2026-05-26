@@ -7,7 +7,7 @@ import jax
 from .math.rigid_body import rigid_body_derivative, RigidBody
 from .math.integration import rk4_func
 from .math.quaternion import unit, quat_apply, conj
-from .sensors import Accelerometer, Gyroscope
+from .sensors import meas_accel, meas_gyro
 
 from ..constants import GM_MOON, R_MOON
 
@@ -40,6 +40,7 @@ class SimParams:
     body: RigidBody = field(default_factory=RigidBody)
     dt: float = 0.1  # time step (seconds)
     t_end: float = 100.0  # max simulation time
+    sensor_noises: dict = field(default_factory=dict) # dict of sensor name to noise covariance
 
 ####################################################################################################
 #                                       O
@@ -70,11 +71,9 @@ def propagate(state, force_body, torque_body, params: SimParams, mu: float = GM_
     q_B2L = state[6:10]
     force = quat_apply(q_B2L, force_body) # body force --> inertial force
 
-
     if mu > 0:
         r = state[0:3]
         force += -mu * r / norm(r)**3
-
 
     def state_dot(t, s):
         return rigid_body_derivative(t, s, force, torque_body, params.body.mass_kg, params.body.I)
@@ -119,19 +118,23 @@ def run_sim(state0, nsteps, dt, control_fn, params: SimParams):
         logger.torque_Nm[step] = torque_body
 
 
-        logger.states[step+1] = propagate(state, force_body, torque_body, params)
-        logger.t[step+1] = logger.t[step] + dt
+        logger.a_meas[step] = meas_accel(force_body/params.body.mass_kg, params.sensor_noises.get("accel", np.zeros((3,3))))
+        logger.w_meas[step] = meas_gyro(state[10:13], params.sensor_noises.get("gyro", np.zeros((3,3))))
 
-        if norm(logger.states[step+1,0:3]) < R_MOON:
+
+        next_state = propagate(state, force_body, torque_body, params)
+        logger.t[step+1] = logger.t[step] + dt
+        logger.states[step+1] = next_state
+
+        if norm(logger.states[0:3]) < R_MOON:
             print("Crashed into moon")
             final_step = step
             break
 
-        # Measurements
-        # logger.u[i] = np.concatenate([force_body, torque_body])
-        # logger.accel_m_s2[i] = force_body / params.body.mass_kg
-        # logger.torque_Nm[i] = torque_body
         
     logger.trunc(final_step)
+
+    logger.a_meas = logger.a_meas[:-1]
+    logger.w_meas = logger.w_meas[:-1]
 
     return logger

@@ -13,7 +13,6 @@ class RigidBody:
     mass_kg: float
     I: float
 
-@jax.jit
 def rigid_body_derivative(t: float, state: jnp.ndarray, force: jnp.ndarray, torque: jnp.ndarray,
                           mass_kg: float, I: jnp.ndarray):
     """Rigid Body dynamics (can be wrapped for optimizer).
@@ -66,3 +65,8 @@ def rigid_body_derivative(t: float, state: jnp.ndarray, force: jnp.ndarray, torq
     dwdt = jnp.linalg.inv(I) @ (Tau - jnp.cross(w, I @ w))
 
     return jnp.concatenate([drdt, dvdt, dqdt, dwdt])
+
+def linearized_rigid_body_derivative(state: jnp.ndarray, force: jnp.ndarray, torque: jnp.ndarray,
+                          mass_kg: float, I: jnp.ndarray):
+    """Linearize the rigid body dynamics around a state and input."""
+    return jax.jacfwd(lambda s, f, tau: rigid_body_derivative(0, s, f, tau, mass_kg, I))(state, force, torque)
