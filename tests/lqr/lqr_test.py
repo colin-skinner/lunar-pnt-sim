@@ -12,8 +12,7 @@ from scipy.integrate import odeint
 import sys
 sys.path.append("../..")
 
-from lunanav.sim.math.rigid_body import rigid_body_derivative
-from lunanav.sim.math.quaternion import angle_axis_to_q, unit, quat_apply, conj
+from lunanav.sim.quaternion import angle_axis_to_q, unit, quat_apply, conj
 from lunanav.plotting import plot_state_vector, debug_3d, plot_control_effort, plot_4
 from lunanav.constants import GM_MOON, R_MOON
 

@@ -1,89 +1,100 @@
 import numpy as np
-from dataclasses import dataclass
+import jax.numpy as jnp
+from dataclasses import dataclass, field
 
-from numpy.linalg import norm
-from .math.quaternion import unit, conj, quat_apply
+from jax.numpy.linalg import norm
+from .quaternion import quat_apply, angle_axis_to_q
+from ..constants import R_MOON
+
+
+@dataclass
+class SensorNoises:
+    accel: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
+    gyro: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
+    laser_alt: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
+
+####################################################################################################
+#                                       Accel
+####################################################################################################
 
 def meas_accel(accel_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = np.eye(3)):
     del orientation # TODO
     return accel_body + np.random.multivariate_normal(np.zeros(3), R)
 
+####################################################################################################
+#                                       Gyro
+####################################################################################################
+
 def meas_gyro(gyro_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = np.eye(3)):
     del orientation # TODO
     return gyro_body + np.random.multivariate_normal(np.zeros(3), R)
-# @dataclass
-# class Measurements:
-#     accel_m_s2: np.ndarray
-#     """3"""
-#     gyro_rad_s2: np.ndarray
-#     """3"""
 
-# class Accelerometer:
+####################################################################################################
+#                                       Los
+####################################################################################################
 
-#     def __init__(self, noise: np.ndarray = np.zeros(3), orientation = np.eye(3)):
-#         """Accelerometer
+los_vectors = np.array([
+    quat_apply(angle_axis_to_q(135, [-1,1,0], degrees=True), [0,0,1]),
+    quat_apply(angle_axis_to_q(135, [-1,-1,0], degrees=True), [0,0,1]),
+    quat_apply(angle_axis_to_q(135, [1,-1,0], degrees=True), [0,0,1]),
+    quat_apply(angle_axis_to_q(135, [1,1,0], degrees=True), [0,0,1])
+])
 
-#         Parameters
-#         ----------
-#         noise : np.ndarray (3,)
-            
-#         orientation : np.ndarray ()
-#             Quaternion orientation with respect to body
-#         """
-#         self.R = np.diag(noise)
-#         self.a_body = np.zeros(3)
-#         self.orientation = orientation
+def get_los_vectors():
+    """M: sensor frame"""
+    return los_vectors # already calculated when module is imported, so only calculated once
 
-#         # TODO: orientation
+def alt_from_los(state):
+    r, q_B2L = state[0:3], state[6:10]
+    vecs_body = get_los_vectors() 
+    distances = []
 
-#     def measure(self, accel_body: np.ndarray):
-#         """
+    for v in vecs_body:
+        vec_inertial = quat_apply(q_B2L, v) # in 
+        tilt_rad = jnp.arccos(jnp.dot(r, vec_inertial) / norm(r) / norm(vec_inertial))
+        alt = norm(r) - R_MOON
+        dist = alt / jnp.cos(tilt_rad)
+        distances.append(dist)
 
-#         Parameters
-#         ----------
-#         state : np.ndarray (13,)
-#             (r,v,q,w)
-#         accel_sp : np.ndarray (3,)
-#             Non-gravity acceleration in body frame
-#         """        
-#         self.a_body = accel_body
-#         return self.a_body
+    return jnp.array(distances)
 
-# class Gyroscope:
+"""Could be a better one"""
+# def alt_from_los(state):
+#     """
+#     Find intersection of LOS rays with lunar sphere.
+#     LOS ray: r + t * d, where d is LOS direction in inertial frame.
+#     Sphere: |x| = R_MOON.
+    
+#     Solve: |r + t*d|^2 = R_MOON^2
+#     Quadratic in t: t^2 + 2*(r·d)*t + |r|^2 - R_MOON^2 = 0
+#     """
+#     r, q_B2L = state[0:3], state[6:10]
+#     vecs_body = get_los_vectors()
+#     distances = []
 
-#     def __init__(self, noise: np.ndarray = np.zeros(3), orientation = np.eye(3)):
-#         """Accelerometer
+#     for v in vecs_body:
+#         d = quat_apply(q_B2L, v)
+#         d = d / jnp.linalg.norm(d)  # ensure unit vector
+        
+#         # Quadratic coefficients
+#         b = jnp.dot(r, d)
+#         c = jnp.dot(r, r) - R_MOON**2
+        
+#         discriminant = b**2 - c
+        
+#         # Two solutions: t = -b ± sqrt(discriminant)
+#         # Pick the smaller positive one (closer intersection)
+#         t = -b - jnp.sqrt(jnp.maximum(discriminant, 0))
+        
+#         # If discriminant < 0, no intersection (LOS misses surface)
+#         dist = jnp.where(discriminant > 0, t, jnp.nan)
+#         # If t < 0, surface is behind us — also invalid
+#         dist = jnp.where(t > 0, dist, jnp.nan)
+        
+#         distances.append(dist)
 
-#         Parameters
-#         ----------
-#         noise : np.ndarray (3,)
-            
-#         orientation : np.ndarray ()
-#             Quaternion orientation with respect to body
-#         """
-#         self.R = np.diag(noise)
-#         self.w_body = np.zeros(3)
-#         self.orientation = orientation
+#     return jnp.array(distances)
 
-#         # TODO: orientation
-
-#     @jax.jit
-#     def measure(self, state: np.ndarray):
-#         """
-#         Parameters
-#         ----------
-#         state : np.ndarray (13,)
-#             (r,v,q,w)
-#         """        
-#         self.w_body = state[10:13]
-#         return self.w_body
-
-# class LaserAltimeter:
-
-
-    # laser_dir_body = unit(quat_apply(q_B2I, [0,0,-1]))
-    # tilt_rad = np.arccos(np.dot(r, z_body) / norm(r) / norm(z_body))
-    # opposite = norm(r) * np.sin(tilt_rad)
-    # x1 = opposite / np.tan(tilt_rad)
-    # x0 = np.sqrt(R_MOON**2 - opposite**2)
-    # alt = x1 - x0
+def meas_laser_alt(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = np.eye(3)):
+    del orientation # TODO
+    return alt_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)

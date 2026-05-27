@@ -2,9 +2,8 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Callable
 
-from ..sim.math.rigid_body import rigid_body_derivative, linearized_rigid_body_derivative
-from ..sim.math.integration import rk4_func
-from ..sim.simulator import SimParams, propagate
+from ..sim.simulator import rigid_body_derivative, lander_motion, linearized_lander_motion
+from ..sim.simulator import SimParams
 
 
 # Generalized EKF based on Algorithms for Decision Making textbook (AA 228)
@@ -28,39 +27,49 @@ def gyro_jacobian(state):
 class EkfParams:
     Q: np.ndarray # process noise covariance
     R: np.ndarray # measurement noise covariance
+    H: Callable[[np.ndarray], np.ndarray] # measurement Jacobian function
+    h: Callable[[np.ndarray], np.ndarray] # measurement function
 
 def ekf_predict(x: np.ndarray, P: np.ndarray, a_meas: np.ndarray, w_meas: np.ndarray,
                 Q: np.ndarray, sim: SimParams) -> np.ndarray:
-    x[10:13] = w_meas
-    force = a_meas * sim.body.mass_kg
-    torque = np.zeros(3) # TODO: add torque measurement
-    x_next = propagate(x, force, torque, sim, mu = 0)
+    x_copy = x.copy()
+    x_copy[10:13] = w_meas
+    force_B = a_meas * sim.body.mass_kg
+    torque_B = np.zeros(3) # TODO: not doing torque_B input right now
+    x_next = lander_motion(x_copy, force_B, torque_B, sim.dt, sim.body.mass_kg, sim.body.I)
 
     if any(np.isnan(x_next)):
-        print(x)
-        print(force)
-        print(torque)
+        print(x_copy)
+        print(force_B)
+        print(torque_B)
         print()
         raise ValueError("EKF prediction step resulted in invalid state")
-    
-    F = linearized_rigid_body_derivative(x, force, torque, sim.body.mass_kg, sim.body.I)
-    Fd = np.eye(13) + F * sim.dt
+        
+    Fd = linearized_lander_motion(x_copy, force_B, torque_B, sim.dt, sim.body.mass_kg, sim.body.I)
 
     P_next = Fd @ P @ Fd.T + Q
 
+    # print(f"  ||Fd||={np.linalg.norm(Fd):.4f}, max={np.max(np.abs(Fd)):.4f}")
+    # print(f"  Fd[6:10, 10:13] (quat-omega block):\n{Fd[6:10, 10:13]}")
+
     return x_next, P_next
 
-# def ekf_update(x: np.ndarray, P: np.ndarray, z: np.ndarray, params: EkfParams, accel: np.ndarray) -> np.ndarray:
-#     H = params.H(x, accel)
+def ekf_update(x: np.ndarray, P: np.ndarray, meas: np.ndarray, H: np.ndarray, x_expected: np.ndarray, R: np.ndarray) -> np.ndarray:
 
-#     y = z - params.h(x, accel)
-#     S = H @ P @ H.T + params.R
+    y = meas - x_expected
+    S = H @ P @ H.T + R
 
-#     K = P @ H.T @ np.linalg.pinv(S)
+    K = P @ H.T @ np.linalg.pinv(S)
 
-#     x_next = x + K @ y
+    x_next = x + K @ y
 
-#     I = np.eye(len(x))
-#     P_next = (I - K @ H) @ P @ (I - K @ H).T + K @ params.R @ K.T
+    q = x_next[6:10]
+    q = q / np.linalg.norm(q)
+    x_next = x_next.at[6:10].set(q)
 
-#     return x_next, P_next
+    
+
+    I = np.eye(len(x))
+    P_next = (I - K @ H) @ P @ (I - K @ H).T + K @ R @ K.T
+
+    return x_next, P_next
