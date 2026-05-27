@@ -9,7 +9,7 @@ from lunanav.sim.simulator import SimParams, SimResults, propagate, run_sim
 from lunanav.plotting import debug_3d, plot_state_vector, plot_control_effort
 from lunanav.sim.math.rigid_body import RigidBody
 from lunanav.visualization import visualize_trajectory
-from lunanav.sim.math.quaternion import angle_axis_to_q, mul, quat_apply
+from lunanav.sim.quaternion import angle_axis_to_q, mul, quat_apply
 
 import jax
 import jax.numpy as jnp
@@ -45,7 +45,7 @@ def control_fn(t, state):
 
     return force_N, torque_Nm
 
-def los_vectors():
+def get_los_vectors():
     # M: sensor frame
     v1 = quat_apply(angle_axis_to_q(135, [-1,1,0], degrees=True), [0,0,1])
     v2 = quat_apply(angle_axis_to_q(135, [-1,-1,0], degrees=True), [0,0,1])
@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     other_vecs = {
         "names": ["LOS1", "LOS2", "LOS3", "LOS4"],
-        "vecs": los_vectors(),
+        "vecs": get_los_vectors(),
         "colors": ['green', 'green', 'green', 'green'],
         "scale": 1e3
     }

@@ -1,6 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
-from .sim.math.quaternion import quat_apply
+from .sim.quaternion import quat_apply
 from .constants import R_MOON
 
 # Define specific colors
@@ -114,7 +114,8 @@ def visualize_trajectory(
     fig.add_trace(moon_surface_trace)
 
     # Lander marker
-    fig.add_trace(add_lander(r[0], show_lander=show_lander))
+    if show_lander:
+        fig.add_trace(add_lander(r[0]))
 
     # # Trajectory colored by time
     # traj = add_gradient_trajectory(r, t, downsample_rate=downsample_rate)
@@ -139,15 +140,13 @@ def visualize_trajectory(
     for step in range(0, n_steps, downsample_rate):
         pos = r[step]
         q_curr = q[step]
-        frame_data = [
-            moon_surface_trace,
-            add_lander(r[step], show_lander=show_lander),
-            # traj,  # Include the gradient trajectory
-            solid_traj,  # Add solid trajectory
-            *get_body_axes(pos, q_curr, axis_size, show_body_axes=show_body_axes),  # Include body axes for the current state
-        ]
+        frame_data = [moon_surface_trace]
+        if show_lander:
+            frame_data.append(add_lander(r[step], show_lander=show_lander))
         if other_vecs is not None:
             frame_data += draw_vectors(pos, q_curr, names, vecs, colors, scale=vec_scale)  # Add other vectors if they exist
+        frame_data.append(solid_traj),  # Add solid trajectory
+        frame_data += get_body_axes(pos, q_curr, axis_size, show_body_axes=show_body_axes)  # Include body axes for the current state
         frames.append(go.Frame(data=frame_data, name=str(step)))  # Append the frame data
     fig.frames = frames
 

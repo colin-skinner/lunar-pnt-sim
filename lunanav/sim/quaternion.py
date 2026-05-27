@@ -1,7 +1,6 @@
 """Quats. Also already been tested"""
-import numpy as np
 from jax.numpy.linalg import norm
-from ...constants import RAD_TO_DEG, DEG_TO_RAD
+from ..constants import DEG_TO_RAD
 import jax.numpy as jnp
 import jax
 
@@ -9,6 +8,16 @@ import jax
 def unit(q: jnp.ndarray):
     q_norm = norm(jnp.asarray(q))
     return jnp.where(q_norm < 0.000001, jnp.zeros(len(q)), jnp.asarray(q) / q_norm)
+
+@jax.jit
+def unitize_state(state: jnp.ndarray):
+    q = state[6:10]
+    q_norm = norm(jnp.asarray(q))
+    return jnp.where(q_norm < 0.000001,
+                     state.at[6:10].set(jnp.zeros(4)),
+                     state.at[6:10].set(jnp.asarray(q) / q_norm))
+
+
 
 @jax.jit
 def conj(q: jnp.ndarray):
@@ -147,7 +156,6 @@ def mul(q1: jnp.ndarray, q2: jnp.ndarray):
 @jax.jit
 def quat_apply(quat: jnp.ndarray, v: jnp.ndarray, passive=True):
 
-    quat = unit(quat)
     v_quat = jnp.array([0,*v])
 
     if passive:   
