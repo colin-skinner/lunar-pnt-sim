@@ -30,21 +30,21 @@ def meas_gyro(gyro_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = np
     return gyro_body + np.random.multivariate_normal(np.zeros(3), R)
 
 ####################################################################################################
-#                                       Los
+#                                       Line-of-sight Distance
 ####################################################################################################
 
 los_vectors = np.array([
-    quat_apply(angle_axis_to_q(135, [-1,1,0], degrees=True), [0,0,1]),
-    quat_apply(angle_axis_to_q(135, [-1,-1,0], degrees=True), [0,0,1]),
-    quat_apply(angle_axis_to_q(135, [1,-1,0], degrees=True), [0,0,1]),
-    quat_apply(angle_axis_to_q(135, [1,1,0], degrees=True), [0,0,1])
+    quat_apply(angle_axis_to_q(25, [-1,1,0], degrees=True), [0,0,-1]),
+    quat_apply(angle_axis_to_q(25, [-1,-1,0], degrees=True), [0,0,-1]),
+    quat_apply(angle_axis_to_q(25, [1,-1,0], degrees=True), [0,0,-1]),
+    quat_apply(angle_axis_to_q(25, [1,1,0], degrees=True), [0,0,-1])
 ])
 
 def get_los_vectors():
     """M: sensor frame"""
     return los_vectors # already calculated when module is imported, so only calculated once
 
-def alt_from_los(state):
+def dist_from_los(state):
     r, q_B2L = state[0:3], state[6:10]
     vecs_body = get_los_vectors() 
     distances = []
@@ -54,12 +54,12 @@ def alt_from_los(state):
         tilt_rad = jnp.arccos(jnp.dot(r, vec_inertial) / norm(r) / norm(vec_inertial))
         alt = norm(r) - R_MOON
         dist = alt / jnp.cos(tilt_rad)
-        distances.append(dist)
+        distances.append(jnp.abs(dist))
 
     return jnp.array(distances)
 
-"""Could be a better one"""
-# def alt_from_los(state):
+# """Could be a better one"""
+# def dist_from_los(state):
 #     """
 #     Find intersection of LOS rays with lunar sphere.
 #     LOS ray: r + t * d, where d is LOS direction in inertial frame.
@@ -97,4 +97,23 @@ def alt_from_los(state):
 
 def meas_laser_alt(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = np.eye(3)):
     del orientation # TODO
-    return alt_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
+    return dist_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
+
+
+####################################################################################################
+#                                       Line-of-sight Velocity
+####################################################################################################
+
+def dist_from_los(state):
+    r, q_B2L = state[0:3], state[6:10]
+    vecs_body = get_los_vectors() 
+    distances = []
+
+    for v in vecs_body:
+        vec_inertial = quat_apply(q_B2L, v) # in 
+        tilt_rad = jnp.arccos(jnp.dot(r, vec_inertial) / norm(r) / norm(vec_inertial))
+        alt = norm(r) - R_MOON
+        dist = alt / jnp.cos(tilt_rad)
+        distances.append(jnp.abs(dist))
+
+    return jnp.array(distances)
