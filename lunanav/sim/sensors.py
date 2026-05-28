@@ -1,9 +1,10 @@
 import numpy as np
+import jax
 import jax.numpy as jnp
 from dataclasses import dataclass, field
 
 from jax.numpy.linalg import norm
-from .quaternion import quat_apply, angle_axis_to_q
+from .quaternion import quat_apply, angle_axis_to_q, hamilton_product
 from ..constants import R_MOON
 
 
@@ -12,6 +13,7 @@ class SensorNoises:
     accel: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
     gyro: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
     laser_alt: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
+    laser_vel: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
 
 ####################################################################################################
 #                                       Accel
@@ -32,12 +34,12 @@ def meas_gyro(gyro_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = np
 ####################################################################################################
 #                                       Line-of-sight Distance
 ####################################################################################################
-
+ANGLE = 25
 los_vectors = np.array([
-    quat_apply(angle_axis_to_q(25, [-1,1,0], degrees=True), [0,0,-1]),
-    quat_apply(angle_axis_to_q(25, [-1,-1,0], degrees=True), [0,0,-1]),
-    quat_apply(angle_axis_to_q(25, [1,-1,0], degrees=True), [0,0,-1]),
-    quat_apply(angle_axis_to_q(25, [1,1,0], degrees=True), [0,0,-1])
+    quat_apply(angle_axis_to_q(ANGLE, [-1,1,0], degrees=True), [0,0,-1]),
+    quat_apply(angle_axis_to_q(ANGLE, [-1,-1,0], degrees=True), [0,0,-1]),
+    quat_apply(angle_axis_to_q(ANGLE, [1,-1,0], degrees=True), [0,0,-1]),
+    quat_apply(angle_axis_to_q(ANGLE, [1,1,0], degrees=True), [0,0,-1])
 ])
 
 def get_los_vectors():
@@ -45,6 +47,7 @@ def get_los_vectors():
     return los_vectors # already calculated when module is imported, so only calculated once
 
 def dist_from_los(state):
+    # TODO: deal with tilting past 90º
     r, q_B2L = state[0:3], state[6:10]
     vecs_body = get_los_vectors() 
     distances = []
@@ -104,16 +107,26 @@ def meas_laser_alt(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = n
 #                                       Line-of-sight Velocity
 ####################################################################################################
 
-def dist_from_los(state):
-    r, q_B2L = state[0:3], state[6:10]
-    vecs_body = get_los_vectors() 
-    distances = []
+def dist_rate_from_los(state):
+    r, v, q, w = state[0:3], state[3:6], state[6:10], state[10:13]
+    
+    # Partial derivatives with respect to r and q
+    # distance itself is only a function of these, and autodiff takes care of the rest
+    # D = D(r,q)
+    def dist_wrt_r(r_val):
+        return dist_from_los(jnp.concatenate([r_val, v, q, w]))
+    def dist_wrt_q(q_val):
+        return dist_from_los(jnp.concatenate([r, v, q_val, w]))
+    
+    dD_dr = jax.jacfwd(dist_wrt_r)(r)  # (4, 3)
+    dD_dq = jax.jacfwd(dist_wrt_q)(q)  # (4, 4)
+    
+    drdt = v
+    dqdt = 0.5 * hamilton_product(q, w)  
+    
+    return dD_dr @ drdt + dD_dq @ dqdt  # (4,)
 
-    for v in vecs_body:
-        vec_inertial = quat_apply(q_B2L, v) # in 
-        tilt_rad = jnp.arccos(jnp.dot(r, vec_inertial) / norm(r) / norm(vec_inertial))
-        alt = norm(r) - R_MOON
-        dist = alt / jnp.cos(tilt_rad)
-        distances.append(jnp.abs(dist))
+def meas_laser_vel(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = np.eye(3)):
+    del orientation # TODO
+    return dist_rate_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
 
-    return jnp.array(distances)
