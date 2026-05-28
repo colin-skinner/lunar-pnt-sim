@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jax
 
 from .quaternion import unit, quat_apply, conj, hamilton_product, unitize_state
-from .sensors import meas_accel, meas_gyro, meas_laser_alt, SensorNoises
+from .sensors import meas_accel, meas_gyro, meas_laser_alt, meas_laser_vel, SensorNoises
 
 from ..constants import GM_MOON, R_MOON
 
@@ -38,6 +38,7 @@ class SimMeasurements:
     accel: np.ndarray
     gyro: np.ndarray
     laser_alt: np.ndarray
+    laser_vel: np.ndarray
 
 
 @dataclass
@@ -221,6 +222,7 @@ def calc_measurements(results: SimResults, mass: float, sensor_noises: SensorNoi
     accel = np.array([meas_accel(force / mass, sensor_noises.accel, state[6:10]) for force, state in zip(forces, states)])
     gyro = np.array([meas_gyro(state[10:13], sensor_noises.gyro, state[6:10]) for state in states])
     laser_alt = np.array([meas_laser_alt(state, sensor_noises.laser_alt, state[6:10]) for state in states])
-    measurements = SimMeasurements(accel, gyro, laser_alt)
+    laser_vel = np.array([meas_laser_vel(state, sensor_noises.laser_vel, state[6:10]) for state in states])
+    measurements = SimMeasurements(accel, gyro, laser_alt, laser_vel)
     
     return measurements

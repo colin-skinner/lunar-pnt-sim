@@ -72,22 +72,22 @@ def get_body_axes(r, q, axis_size, show_body_axes=True):
 
 
 def visualize_trajectory(
-    states: np.ndarray,
+    trajectories: np.ndarray | list,
     t: np.ndarray = None,
     dt: float = 0.1,
     axis_scale: float = 1000.0,
-    * , 
-    title: str = "Lunar Descent Trajectory",
+    *, 
+    title: str = "Lunar Descent Trajectories",
     other_vecs: dict = None,
     show_body_axes: bool = True,
     show_lander: bool = True,
     downsample_rate: int = 5  # For downsampling the number of plotted frames
 ):
     """
-    Simple interactive 3D trajectory visualizer.
+    Simple interactive 3D trajectory visualizer for one or multiple trajectories.
     
     Args:
-        states: [N, 13] array (r, v, q, omega)
+        trajectories: list of [N, 13] arrays (each containing r, v, q, omega for a trajectory)
         t: time array (auto-generated if None)
         dt: time step in seconds
         axis_scale: length of body axis vectors (meters)
@@ -96,60 +96,64 @@ def visualize_trajectory(
     Returns:
         plotly Figure
     """
-    
-    n_steps = len(states)
-    if t is None:
-        t = np.arange(n_steps) * dt
-    
-    # Extract states
-    r = states[:, 0:3]
-    q = states[:, 6:10]
+
+    if isinstance(trajectories, np.ndarray):
+        trajectories = [trajectories]  # Wrap in list if single trajectory provided
     
     fig = go.Figure()
+
+    all_frames = []
     
-    # Moon surface
-    xx, yy = np.meshgrid(np.linspace(-10000, 10000, 5), np.linspace(-10000, 10000, 5))
-    zz = np.full_like(xx, r[0, 2])  # Use the initial altitude
-    moon_surface_trace = moon_surface(xx, yy, zz)
-    fig.add_trace(moon_surface_trace)
+    for index, states in enumerate(trajectories):
+        n_steps = len(states)
+        if t is None:
+            t = np.arange(n_steps) * dt
+        
+        # Extract states
+        r = states[:, 0:3]
+        q = states[:, 6:10]
+        
+        # Moon surface
+        xx, yy = np.meshgrid(np.linspace(-10000, 10000, 5), np.linspace(-10000, 10000, 5))
+        zz = np.full_like(xx, r[0, 2])  # Use the initial altitude
+        moon_surface_trace = moon_surface(xx, yy, zz)
+        fig.add_trace(moon_surface_trace)
 
-    # Lander marker
-    if show_lander:
-        fig.add_trace(add_lander(r[0]))
-
-    # # Trajectory colored by time
-    # traj = add_gradient_trajectory(r, t, downsample_rate=downsample_rate)
-    # fig.add_trace(traj)
-    
-    # Solid trajectory for visibility
-    solid_traj = add_solid_trajectory(r, color='gold', downsample_rate=downsample_rate)  # Solid gold trajectory
-    fig.add_trace(solid_traj)
-
-    # Body axes setup 
-    traj_scale = np.max(np.linalg.norm(r - r[0], axis=1))  # max distance from start
-    axis_size = min(axis_scale, traj_scale * 0.1)  # 10% of trajectory extent or user-specified
-    fig.add_traces(get_body_axes(r[0], q[0], axis_size, show_body_axes=show_body_axes))  # Initial body axes
-
-    # Other vectors (e.g., velocity, acceleration) if provided
-    if other_vecs is not None:
-        names, vecs, colors, vec_scale = other_vecs["names"], other_vecs["vecs"], other_vecs["colors"], other_vecs.get("scale", 1e3)
-        fig.add_traces(draw_vectors(r[0], q[0], names, vecs, colors, scale=vec_scale))
-
-    # Animation frames
-    frames = []
-    for step in range(0, n_steps, downsample_rate):
-        pos = r[step]
-        q_curr = q[step]
-        frame_data = [moon_surface_trace]
+        # Lander marker
         if show_lander:
-            frame_data.append(add_lander(r[step], show_lander=show_lander))
-        if other_vecs is not None:
-            frame_data += draw_vectors(pos, q_curr, names, vecs, colors, scale=vec_scale)  # Add other vectors if they exist
-        frame_data.append(solid_traj),  # Add solid trajectory
-        frame_data += get_body_axes(pos, q_curr, axis_size, show_body_axes=show_body_axes)  # Include body axes for the current state
-        frames.append(go.Frame(data=frame_data, name=str(step)))  # Append the frame data
-    fig.frames = frames
+            fig.add_trace(add_lander(r[0]))
 
+        # Solid trajectory for visibility
+        solid_traj = add_solid_trajectory(r, color=f'gold' if index % 2 == 0 else 'silver', downsample_rate=downsample_rate)  # Different colors for different trajectories
+        fig.add_trace(solid_traj)
+
+        # Body axes setup 
+        traj_scale = np.max(np.linalg.norm(r - r[0], axis=1))  # max distance from start
+        axis_size = min(axis_scale, traj_scale * 0.1)  # 10% of trajectory extent or user-specified
+        fig.add_traces(get_body_axes(r[0], q[0], axis_size, show_body_axes=show_body_axes))
+
+        # Other vectors (e.g., velocity, acceleration) if provided
+        if other_vecs is not None:
+            names, vecs, colors, vec_scale = other_vecs["names"], other_vecs["vecs"], other_vecs["colors"], other_vecs.get("scale", 1e3)
+            fig.add_traces(draw_vectors(r[0], q[0], names, vecs, colors, scale=vec_scale))
+
+        # Animation frames
+        frames = []
+        for step in range(0, n_steps, downsample_rate):
+            pos = r[step]
+            q_curr = q[step]
+            frame_data = [moon_surface_trace]
+            if show_lander:
+                frame_data.append(add_lander(r[step], show_lander=show_lander))
+            if other_vecs is not None:
+                frame_data += draw_vectors(pos, q_curr, names, vecs, colors, scale=vec_scale)  # Add other vectors if they exist
+            frame_data.append(solid_traj)  # Add solid trajectory
+            frame_data += get_body_axes(pos, q_curr, axis_size, show_body_axes=show_body_axes)  # Include body axes for the current state
+            frames.append(go.Frame(data=frame_data, name=str(step)))  # Append the frame data
+        all_frames.extend(frames)  # Combine frames from all trajectories
+
+    fig.frames = all_frames  # Set the frames for animation 
+    
     # Slider and Updatemenus
     sliders = [{'active': 0, 'yanchor': 'top', 'y': 0, 'xanchor': 'left', 'x': 0.1, 'len': 0.9,
                 'currentvalue': {'prefix': 'Time: ', 'suffix': ' s', 'visible': True},
@@ -178,9 +182,10 @@ def visualize_trajectory(
     )
     
     # Auto-scale to the maximum trajectory extent
-    x_min, x_max = np.min(r[:, 0]), np.max(r[:, 0])
-    y_min, y_max = np.min(r[:, 1]), np.max(r[:, 1])
-    z_min, z_max = np.min(r[:, 2]), np.max(r[:, 2])
+    all_r = np.concatenate([states[:, 0:3] for states in trajectories])  # Concatenate positions of all trajectories
+    x_min, x_max = np.min(all_r[:, 0]), np.max(all_r[:, 0])
+    y_min, y_max = np.min(all_r[:, 1]), np.max(all_r[:, 1])
+    z_min, z_max = np.min(all_r[:, 2]), np.max(all_r[:, 2])
 
     x_middle = (x_min + x_max) / 2
     y_middle = (y_min + y_max) / 2
@@ -201,30 +206,14 @@ def visualize_trajectory(
         zaxis_title='Z (m)',
         xaxis=dict(
             range=x_range,
-            # gridcolor='rgba(255, 255, 255, 0.1)',  # Color of the grid lines
-            # zerolinecolor='rgba(255, 255, 255, 0.3)',  # Color of the zero line on x-axis
-            # titlefont=dict(color='white'),  # Title font color for x-axis
-            # tickfont=dict(color='white'),  # Tick font color for x-axis
-            # linecolor='white'  # Color of the x-axis line
         ),
         yaxis=dict(
             range=y_range,
-            # gridcolor='rgba(255, 255, 255, 0.1)',  # Color of the grid lines
-            # zerolinecolor='rgba(255, 255, 255, 0.3)',  # Color of the zero line on y-axis
-            # titlefont=dict(color='white'),  # Title font color for y-axis
-            # tickfont=dict(color='white'),  # Tick font color for y-axis
-            # linecolor='white'  # Color of the y-axis line
         ),
         zaxis=dict(
             range=z_range,
-            # gridcolor='rgba(255, 255, 255, 0.1)',  # Color of the grid lines
-            # zerolinecolor='rgba(255, 255, 255, 0.3)',  # Color of the zero line on z-axis
-            # titlefont=dict(color='white'),  # Title font color for z-axis
-            # tickfont=dict(color='white'),  # Tick font color for z-axis
-            # linecolor='white'  # Color of the z-axis line
         ),
         aspectmode='cube',  # Ensure equal scaling for all axes
-        # bgcolor='rgb(0, 0, 0, 1)',  # Set scene background to black
         camera=dict(eye=dict(x=0.7, y=0.7, z=0.7))
     )
 

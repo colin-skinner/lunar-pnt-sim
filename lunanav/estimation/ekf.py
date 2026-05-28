@@ -1,6 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 from typing import Callable
+from scipy.linalg import block_diag
 
 from ..sim.simulator import rigid_body_derivative, lander_motion, linearized_lander_motion
 from ..sim.simulator import SimParams
@@ -73,3 +74,22 @@ def ekf_update(x: np.ndarray, P: np.ndarray, meas: np.ndarray, H: np.ndarray, x_
     P_next = (I - K @ H) @ P @ (I - K @ H).T + K @ R @ K.T
 
     return x_next, P_next
+
+def Qd_from_accel_white(dt, sigma_a):
+
+    # 2x2 covariance for (pos, vel) driven by white accel noise in ONE axis
+    Q1 = np.array([
+        [dt**3/3, dt**2/2],
+        [dt**2/2, dt     ]
+    ]) * (sigma_a**2)
+
+    # Build block-diagonal structure for x, y, z axes.
+    # At this point the order is [x, xd, y, yd, z, zd]
+    Q_block = block_diag(Q1, Q1, Q1)
+
+    # Reorder rows/cols to match OUR state order: [x, y, z, xd, yd, zd]
+    # This permutation swaps (pos, vel) pairs into the correct structure.
+    perm = np.array([0, 2, 4,   1, 3, 5])
+    Q6 = Q_block[np.ix_(perm, perm)]
+
+    return Q6
