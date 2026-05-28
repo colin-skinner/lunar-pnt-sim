@@ -225,7 +225,7 @@ def calc_measurements(results: SimResults, mass: float, sensor_noises: SensorNoi
 
     accel = np.array([meas_accel(force / mass, sensor_noises.accel, state[6:10]) for force, state in zip(forces, states)])
     print("Accel done")
-    gyro = np.array([meas_gyro(state[10:13], sensor_noises.gyro, state[6:10]) for state in states])
+    gyro = np.array([meas_gyro(state[10:13], sensor_noises.gyro, state[6:10]) for state in states]) 
     print("Gyro done")
     laser_alt = np.array([meas_laser_alt(state, sensor_noises.laser_alt, state[6:10]) for state in states])
     print("Laser dist done")
