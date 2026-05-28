@@ -8,10 +8,30 @@ x_axis_color = 'red'
 y_axis_color = 'green'
 z_axis_color = 'blue'
 
-def moon_surface(xx, yy, zz):
-    """Returns go.Surface of Moon"""
-    return go.Surface(x=xx, y=yy, z=zz, colorscale=[[0, '#333333'], [1, '#555555']],
-                             showscale=False, name='Moon', hoverinfo='skip')
+# def moon_surface(xx, yy, zz):
+#     """Returns go.Surface of Moon"""
+#     return go.Surface(x=xx, y=yy, z=zz, colorscale=[[0, '#333333'], [1, '#555555']],
+#                              showscale=False, name='Moon', hoverinfo='skip')
+
+def moon_surface(radius=R_MOON, offset: np.ndarray = np.zeros(3), resolution=25, color='#444444'):
+    """Returns go.Surface of Moon as a sphere"""
+    # Create sphere using spherical coordinates
+    u = np.linspace(0, 2 * np.pi, resolution)
+    v = np.linspace(0, np.pi, resolution)
+    
+    x = radius * np.outer(np.cos(u), np.sin(v)) + offset[0]
+    y = radius * np.outer(np.sin(u), np.sin(v)) + offset[1]
+    z = radius * np.outer(np.ones(np.size(u)), np.cos(v)) + offset[2]
+    
+    return go.Surface(
+        x=x, y=y, z=z,
+        colorscale=[[0, '#333333'], [1, '#555555']],
+        showscale=False,
+        name='Moon',
+        hoverinfo='skip',
+        lighting=dict(ambient=0.4, diffuse=0.6, specular=0.2, roughness=0.8),
+        lightposition=dict(x=100000, y=100000, z=100000)
+    )
 
 def add_lander(position, show_lander=True):
     """Add lander marker to the figure."""
@@ -116,7 +136,7 @@ def visualize_trajectory(
         # Moon surface
         xx, yy = np.meshgrid(np.linspace(-10000, 10000, 5), np.linspace(-10000, 10000, 5))
         zz = np.full_like(xx, r[0, 2])  # Use the initial altitude
-        moon_surface_trace = moon_surface(xx, yy, zz)
+        moon_surface_trace = moon_surface(radius=R_MOON, offset = [0,0,-R_MOON], resolution=100)
         fig.add_trace(moon_surface_trace)
 
         # Lander marker
