@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jax
 
 from .quaternion import unit, quat_apply, conj, hamilton_product, unitize_state
-from .sensors import meas_accel, meas_gyro, meas_laser_alt, meas_laser_vel, SensorNoises
+from .sensors import meas_accel, meas_gyro, meas_laser_alt, meas_laser_vel, meas_star_trackcer, SensorNoises
 
 from ..constants import GM_MOON, R_MOON
 
@@ -39,6 +39,7 @@ class SimMeasurements:
     gyro: np.ndarray
     laser_alt: np.ndarray
     laser_vel: np.ndarray
+    star_tracker: np.ndarray
 
 
 @dataclass
@@ -54,6 +55,7 @@ class SimParams:
 #                                       Rigid and motion
 ####################################################################################################
 
+@jax.jit
 def rigid_body_derivative(t: float, state: jnp.ndarray, force: jnp.ndarray, torque: jnp.ndarray,
                           mass_kg: float, I: jnp.ndarray):
     """Rigid Body dynamics (can be wrapped for optimizer).
@@ -98,6 +100,7 @@ def rigid_body_derivative(t: float, state: jnp.ndarray, force: jnp.ndarray, torq
 
     return jnp.concatenate([drdt, dvdt, dqdt, dwdt])
 
+@jax.jit
 def rk4_next_step(t: float, dt: float, state_prev: float, force_I: jnp.ndarray, torque_B: jnp.ndarray, mass: float, I_B: jnp.ndarray):
 
     def helper(t,s):
@@ -115,6 +118,7 @@ def rk4_next_step(t: float, dt: float, state_prev: float, force_I: jnp.ndarray, 
 #                                       Actual propagation
 ####################################################################################################
 
+@jax.jit
 def lander_motion(state: jnp.ndarray, force_B: jnp.ndarray, torque_B: jnp.ndarray, dt: float, mass: float, I: np.ndarray, mu: float = GM_MOON):
     """
     Propagate the state of lander forward in time with gravity
@@ -220,9 +224,15 @@ def calc_measurements(results: SimResults, mass: float, sensor_noises: SensorNoi
     forces = results.force_N
 
     accel = np.array([meas_accel(force / mass, sensor_noises.accel, state[6:10]) for force, state in zip(forces, states)])
+    print("Accel done")
     gyro = np.array([meas_gyro(state[10:13], sensor_noises.gyro, state[6:10]) for state in states])
+    print("Gyro done")
     laser_alt = np.array([meas_laser_alt(state, sensor_noises.laser_alt, state[6:10]) for state in states])
+    print("Laser dist done")
     laser_vel = np.array([meas_laser_vel(state, sensor_noises.laser_vel, state[6:10]) for state in states])
-    measurements = SimMeasurements(accel, gyro, laser_alt, laser_vel)
+    print("Laser vel done")
+    q_star_tracker = np.array([meas_star_trackcer(state[6:10], sensor_noises.star_tracker) for state in states])
+    print("Quat done")
+    measurements = SimMeasurements(accel, gyro, laser_alt, laser_vel, q_star_tracker)
     
     return measurements

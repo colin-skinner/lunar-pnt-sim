@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from dataclasses import dataclass, field
 
 from jax.numpy.linalg import norm
-from .quaternion import quat_apply, angle_axis_to_q, hamilton_product
+from .quaternion import quat_apply, angle_axis_to_q, hamilton_product, unit
 from ..constants import R_MOON
 
 
@@ -14,28 +14,31 @@ class SensorNoises:
     gyro: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
     laser_alt: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
     laser_vel: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
+    star_tracker: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
 
 ####################################################################################################
 #                                       Accel
 ####################################################################################################
 
-def meas_accel(accel_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = np.eye(3)):
+def meas_accel(accel_body: np.ndarray, R: jnp.ndarray, orientation: jnp.ndarray = jnp.eye(3)):
     del orientation # TODO
-    return accel_body + np.random.multivariate_normal(np.zeros(3), R)
+    assert R.shape == (3,3)
+    return accel_body + np.random.multivariate_normal(jnp.zeros(3), R)
 
 ####################################################################################################
 #                                       Gyro
 ####################################################################################################
 
-def meas_gyro(gyro_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = np.eye(3)):
+def meas_gyro(gyro_body: np.ndarray, R: jnp.ndarray, orientation: jnp.ndarray = jnp.eye(3)):
     del orientation # TODO
-    return gyro_body + np.random.multivariate_normal(np.zeros(3), R)
+    assert R.shape == (3,3)
+    return gyro_body + np.random.multivariate_normal(jnp.zeros(3), R)
 
 ####################################################################################################
 #                                       Line-of-sight Distance
 ####################################################################################################
 ANGLE = 25
-los_vectors = np.array([
+los_vectors = jnp.array([
     quat_apply(angle_axis_to_q(ANGLE, [-1,1,0], degrees=True), [0,0,-1]),
     quat_apply(angle_axis_to_q(ANGLE, [-1,-1,0], degrees=True), [0,0,-1]),
     quat_apply(angle_axis_to_q(ANGLE, [1,-1,0], degrees=True), [0,0,-1]),
@@ -46,6 +49,7 @@ def get_los_vectors():
     """M: sensor frame"""
     return los_vectors # already calculated when module is imported, so only calculated once
 
+@jax.jit
 def dist_from_los(state):
     # TODO: deal with tilting past 90º
     r, q_B2L = state[0:3], state[6:10]
@@ -98,15 +102,17 @@ def dist_from_los(state):
 
 #     return jnp.array(distances)
 
-def meas_laser_alt(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = np.eye(3)):
+def meas_laser_alt(state: np.ndarray, R: jnp.ndarray, orientation: jnp.ndarray = jnp.eye(3)):
     del orientation # TODO
-    return dist_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
+    assert R.shape == (4,4)
+    return dist_from_los(state) + np.random.multivariate_normal(jnp.zeros(4), R)
 
 
 ####################################################################################################
 #                                       Line-of-sight Velocity
 ####################################################################################################
 
+@jax.jit
 def dist_rate_from_los(state):
     r, v, q, w = state[0:3], state[3:6], state[6:10], state[10:13]
     
@@ -118,15 +124,24 @@ def dist_rate_from_los(state):
     def dist_wrt_q(q_val):
         return dist_from_los(jnp.concatenate([r, v, q_val, w]))
     
-    dD_dr = jax.jacfwd(dist_wrt_r)(r)  # (4, 3)
-    dD_dq = jax.jacfwd(dist_wrt_q)(q)  # (4, 4)
+    dD_dr = jax.jit(jax.jacfwd(dist_wrt_r))(r)  # (4, 3)
+    dD_dq = jax.jit(jax.jacfwd(dist_wrt_q))(q)  # (4, 4)
     
     drdt = v
     dqdt = 0.5 * hamilton_product(q, w)  
     
     return dD_dr @ drdt + dD_dq @ dqdt  # (4,)
 
-def meas_laser_vel(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = np.eye(3)):
+def meas_laser_vel(state: np.ndarray, R: jnp.ndarray, orientation: jnp.ndarray = jnp.eye(3)):
     del orientation # TODO
-    return dist_rate_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
+    assert R.shape == (4,4)
+    return dist_rate_from_los(state) + np.random.multivariate_normal(jnp.zeros(4), R)
 
+####################################################################################################
+#                                       Star tracker
+####################################################################################################
+
+def meas_star_trackcer(q_B2L: np.ndarray, R: jnp.ndarray, orientation: jnp.ndarray = jnp.eye(3)):
+    del orientation # TODO
+    assert R.shape == (4,4)
+    return unit(q_B2L + np.random.multivariate_normal(jnp.zeros(4), R))
