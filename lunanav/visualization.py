@@ -101,6 +101,7 @@ def visualize_trajectory(
     other_vecs: dict = None,
     show_body_axes: bool = True,
     show_lander: bool = True,
+    show_moon: bool = True,
     downsample_rate: int = 5  # For downsampling the number of plotted frames
 ):
     """
@@ -134,10 +135,11 @@ def visualize_trajectory(
         q = states[:, 6:10]
         
         # Moon surface
-        xx, yy = np.meshgrid(np.linspace(-10000, 10000, 5), np.linspace(-10000, 10000, 5))
-        zz = np.full_like(xx, r[0, 2])  # Use the initial altitude
-        moon_surface_trace = moon_surface(radius=R_MOON, offset = [0,0,-R_MOON], resolution=100)
-        fig.add_trace(moon_surface_trace)
+        # xx, yy = np.meshgrid(np.linspace(-10000, 10000, 5), np.linspace(-10000, 10000, 5))
+        # zz = np.full_like(xx, r[0, 2])  # Use the initial altitude
+        if show_moon:
+            moon_surface_trace = moon_surface(radius=R_MOON, offset = [0,0,-R_MOON], resolution=20)
+            fig.add_trace(moon_surface_trace)
 
         # Lander marker
         if show_lander:
@@ -162,7 +164,9 @@ def visualize_trajectory(
         for step in range(0, n_steps, downsample_rate):
             pos = r[step]
             q_curr = q[step]
-            frame_data = [moon_surface_trace]
+            frame_data = []
+            if show_moon:
+                frame_data.append(moon_surface_trace)
             if show_lander:
                 frame_data.append(add_lander(r[step], show_lander=show_lander))
             if other_vecs is not None:

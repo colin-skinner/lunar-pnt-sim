@@ -120,8 +120,7 @@ def rk4_next_step(t: float, dt: float, state_prev: float, force_I: jnp.ndarray, 
 
 @jax.jit
 def lander_motion(state: jnp.ndarray, force_B: jnp.ndarray, torque_B: jnp.ndarray, dt: float, mass: float, I: np.ndarray, mu: float = GM_MOON):
-    """
-    Propagate the state of lander forward in time with gravity
+    """_summary_
 
     Parameters
     ----------
@@ -131,7 +130,10 @@ def lander_motion(state: jnp.ndarray, force_B: jnp.ndarray, torque_B: jnp.ndarra
         Force acting on the body (in body frame) `[N]`
     torque_B : jnp.ndarray (3,)
         Torque acting on the body (in body frame) `[Nm]`
-    params : SimParams
+    dt : float
+    mass : float
+    I : np.ndarray
+        Body frame
     mu : float, optional
         Gravitational parameter (GM) of the central body `[m3/s2]`. If 0, no gravity forces are applied.
 
@@ -156,6 +158,7 @@ def lander_motion(state: jnp.ndarray, force_B: jnp.ndarray, torque_B: jnp.ndarra
 
     return next_state
 
+@jax.jit
 def linearized_lander_motion(state: jnp.ndarray, force_B: jnp.ndarray, torque_B: jnp.ndarray,
                           dt: float, mass: float, I: jnp.ndarray):
     """Linearize propagation under gravity around a state and BODY input."""
