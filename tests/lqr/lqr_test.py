@@ -159,16 +159,36 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
             # print(P[k+1])
             # breakpoint
 
-            # Add regularization for numerical stability
-            regularization = 1e-6
-            H_uu_reg = H_uu + regularization * np.eye(m)
-
-
             q_k = Q @ (s_bar[k] - s_goal) # From part (b)
             r_k = R @ u_bar[k] # From part (b)
 
             h_x = q_k + A[k].T @ p[k+1]
             h_u = r_k + B[k].T @ p[k+1]
+
+            # STRONGER regularization
+            regularization = 1e-2  # Increased from 1e-4
+            H_uu_reg = H_uu + regularization * np.eye(m)
+            
+            # Check condition number before solving
+            cond = np.linalg.cond(H_uu_reg)
+            if cond > 1e10:
+                print(f"  Warning: H_uu ill-conditioned at k={k}, cond={cond:.2e}")
+                regularization = 1.0  # Much stronger
+                H_uu_reg = H_uu + regularization * np.eye(m)
+            
+            try:
+                Y[k] = -np.linalg.solve(H_uu_reg, H_xu.T)
+                y[k] = -np.linalg.solve(H_uu_reg, h_u)
+            except np.linalg.LinAlgError:
+                print(f"  Using pseudoinverse at k={k}")
+                Y[k] = -np.linalg.pinv(H_uu_reg) @ H_xu.T
+                y[k] = -np.linalg.pinv(H_uu_reg) @ h_u
+                
+                # Check for NaN in gains
+                if np.any(np.isnan(Y[k])) or np.any(np.isnan(y[k])):
+                    print(f"  NaN in gains at k={k}, stopping iteration")
+                    converged = True  # Stop but keep previous good solution
+                    break
 
             # print(f"k={k:3d} | |A|={np.linalg.norm(A[k]):.2e}" + 
             #     f" |B|={np.linalg.norm(B[k]):.2e}" + 
@@ -197,17 +217,17 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
 
             # y[k] = -np.linalg.pinv(H_uu) @ h_u
 
-            try:
-                Y[k] = -np.linalg.solve(H_uu_reg, H_xu.T)
-                y[k] = -np.linalg.solve(H_uu_reg, h_u)
-                P[k] = H_xx + H_xu @ Y[k]
-                p[k] = h_x + H_xu @ y[k]
-            except np.linalg.LinAlgError:
-                print(f"Linear algebra error at k={k}")
-                Y[k] = -np.linalg.pinv(H_uu_reg) @ H_xu.T
-                y[k] = -np.linalg.pinv(H_uu_reg) @ h_u
-                P[k] = H_xx + H_xu @ Y[k]
-                p[k] = h_x + H_xu @ y[k]
+            # try:
+            #     Y[k] = -np.linalg.solve(H_uu_reg, H_xu.T)
+            #     y[k] = -np.linalg.solve(H_uu_reg, h_u)
+            #     P[k] = H_xx + H_xu @ Y[k]
+            #     p[k] = h_x + H_xu @ y[k]
+            # except np.linalg.LinAlgError:
+            #     print(f"Linear algebra error at k={k}")
+            #     Y[k] = -np.linalg.pinv(H_uu_reg) @ H_xu.T
+            #     y[k] = -np.linalg.pinv(H_uu_reg) @ h_u
+            #     P[k] = H_xx + H_xu @ Y[k]
+            #     p[k] = h_x + H_xu @ y[k]
 
         # After backward pass, before forward pass
         # if i % 10 == 0:
@@ -227,7 +247,11 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
         # visualize_trajectory(s_bar - np.tile(moon_offset, (N+1, 1)), None, dt, title="Lunar Descent Trajectory with LOS Vectors", show_lander=True, show_moon=True).show()
         # breakpoint()
 
-        print(f"===================== AFTER FORWARD {i} =====================")
+        if converged:
+            print("Stopping due to numerical issues, using previous solution")
+            break
+
+        print(f"===================== AFTER BACKWARD {i} =====================")
         debug_trajectory(s_bar, u_bar, s_goal, i, N, dt, mass=100)
 
         # Forward pass
@@ -249,25 +273,34 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
             # State deviation at next step
             ds[k+1] = s_next - s_bar[k+1]
 
+            # CHECK IF UNDERGROUND
+            # altitude = (s_bar[k+1, 2] + ds[k+1, 2]) - R_MOON
+            # if altitude < 0:
+            #     print(f"  WARNING: Went underground at step {k}, alt={altitude:.1f}m")
+            #     # Truncate trajectory here
+            #     N_actual = k + 1
+            #     # s_bar = s_bar[:N_actual+1]
+            #     # u_bar = u_bar[:N_actual]
+            #     break
+
 
         s_bar = s_bar + ds
         u_bar = u_bar + du
 
-        print(f"===================== AFTER BACKWARD {i} =====================")
-        debug_trajectory(s_bar, u_bar, s_goal, i, N, dt, mass=100)
-        breakpoint()
-
-        # After backward pass, before forward pass
-        # if i % 10 == 0:
-        # print("\n" + "="*60)
-        # print("AFTER adding ds and du")
-        # print(f"Initial state: {s_bar[0, 0:3]}")
-        # print(f"Final state:   {s_bar[-1, 0:3]}")
-        # print(f"Goal state:    {s_goal[0:3]}")
-        # print(f"Position error: {np.linalg.norm(s_bar[-1, 0:3] - s_goal[0:3]):.2f} m")
-        # print(f"Velocity error: {np.linalg.norm(s_bar[-1, 3:6] - s_goal[3:6]):.2f} m/s")
-        # print("="*60 + "\n")
+        pos_err = np.linalg.norm(s_bar[-1, 0:3] - s_goal[0:3])
+        vel_err = np.linalg.norm(s_bar[-1, 3:6] - s_goal[3:6])
         
+        if pos_err < 1.0 and vel_err < 1.0:  # Within 1m and 1m/s
+            print(f"\nGood enough solution at iteration {i}:")
+            print(f"  Position error: {pos_err:.2f} m")
+            print(f"  Velocity error: {vel_err:.2f} m/s")
+            converged = True
+            break
+
+        print(f"===================== AFTER FORWARD {i} =====================")
+        debug_trajectory(s_bar, u_bar, s_goal, i, N, dt, mass=100)
+        # breakpoint()
+
         #######################################################################
         # breakpoint()
         # if i % 10 == 0:
@@ -282,34 +315,55 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
             # plt.show(block=False)
             # breakpoint()
 
+
+        
+        # Compute errors
+        pos_err = np.linalg.norm(s_bar[-1, 0:3] - s_goal[0:3])
+        vel_err = np.linalg.norm(s_bar[-1, 3:6] - s_goal[3:6])
+        total_err = pos_err + vel_err
+        
+        # Save best solution
+        if total_err < best_error:
+            best_error = total_err
+            best_s_bar = s_bar.copy()
+            best_u_bar = u_bar.copy()
+        
+        print(f"Iter {i}: pos_err={pos_err:.2f}m, vel_err={vel_err:.2f}m/s")
+        
+        # Check for convergence
+        if pos_err < 1 and vel_err < 1:
+            print(f"\n✓ Converged at iteration {i}!")
+            print(f"  Final position error: {pos_err:.3f} m")
+            print(f"  Final velocity error: {vel_err:.3f} m/s")
+            converged = True
+            break
+
         if np.max(np.abs(du)) < eps:
             converged = True
             break
     # if not converged:
     #     raise RuntimeError("iLQR did not converge!")
-    return s_bar, u_bar, Y, y
+    return best_s_bar, best_u_bar, Y, y
 
 def get_costs():
-    # State weights
+    """Properly scaled costs for lunar landing"""
     Q = np.diag([
-        1e-8, 1e-8, 1e-8,    # position - very light
-        1e-8, 1e-8, 1e-8,    # velocity
-        1e-10, 1e-10, 1e-10, 1e-10,  # quaternion
-        1e-10, 1e-10, 1e-10,  # angular velocity
+        1e-6, 1e-6, 1e-6,      # position during flight
+        1e-4, 1e-4, 1e-4,      # velocity during flight
+        1e-6, 1e-6, 1e-6, 1e-6,  # quaternion
+        1e-6, 1e-6, 1e-6,      # angular velocity
     ])
 
-    # Input weights - BALANCED
     R = np.diag([
-        1e-5, 1e-5, 1e-5,    # thrust (all axes equal)
-        1e-7, 1e-7, 1e-7,    # torques
+        1e-6, 1e-6, 1e-6,      # thrust - allow moderate control
+        1e-4, 1e-4, 1e-4,      # torque
     ])
 
-    # Terminal cost
     QN = np.diag([
-        1e-1, 1e-1, 1e0,     # final position
-        1e1, 1e1, 1e1,       # final velocity - MUST be zero
-        1e-2, 1e-2, 1e-2, 1e-2,  # final quaternion
-        1e-2, 1e-2, 1e-2,    # final angular velocity
+        1e2, 1e2, 1e3,         # final position - MUST be at target
+        1e3, 1e3, 1e3,         # final velocity - MUST be zero
+        1e0, 1e0, 1e0, 1e0,    # final attitude
+        1e0, 1e0, 1e0,         # final angular rate
     ])
 
     return Q, R, QN
@@ -320,7 +374,7 @@ if __name__ == "__main__":
     m = 6  # control dimension (Thruster force and ACS torques)
     Q,R,QN = get_costs()
     T = 100.0  # simulation time
-    dt = 0.5  # sampling time
+    dt = 1  # sampling time
 
     # Spacecraft
     mass = 100 # kg
@@ -328,13 +382,13 @@ if __name__ == "__main__":
     I_inv = jnp.linalg.pinv(I)
 
 
-    r = R_MOON + 15000 # GEO
+    r = R_MOON + 10000 # GEO
     v = np.sqrt(GM_MOON/r) # circular velocity
 
     # Boundary conditions
     s0 = np.array([
     0,-5000, r, 
-    0 ,10, 0,
+    0 ,100, -50,
     1,0,0,0,
     # *angle_axis_to_q(90, [1,0,0], True),
     0,0,0])
@@ -381,7 +435,9 @@ if __name__ == "__main__":
         s[k + 1] = odeint(lambda s, t: f(s, u[k]), s[k], t[k : k + 2])[1]
     print("done! ({:.2f} s)".format(time.time() - start), flush=True)
     visualize_trajectory(s_bar - np.tile(moon_offset, (N+1, 1)), None, dt, title="Lunar Descent Trajectory with LOS Vectors", show_lander=True, show_moon=True).show()
-    plot_3(t, s[:,0:2])
+    plot_3(t, s[:,0:3])
+    plot_3(t[:-1], u[:,0:3])
+    plot_3(t[:-1], u[:,3:6])
     breakpoint()
     plot_state_vector(t, s[:,0:3], s[:,3:6], s[:,6:10], s[:,10:13])
     # plt.show(block=False)
