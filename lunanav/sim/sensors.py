@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from dataclasses import dataclass, field
 
 from jax.numpy.linalg import norm
-from .quaternion import quat_apply, angle_axis_to_q, hamilton_product, unit
+from .quaternion import quat_apply, angle_axis_to_q, hamilton_product, unit, conj
 from ..constants import R_MOON
 
 
@@ -15,6 +15,7 @@ class SensorNoises:
     laser_alt: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
     laser_vel: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
     star_tracker: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
+    range_tracker: np.ndarray = field(default_factory=lambda: np.zeros((6,6)))
 
 ####################################################################################################
 #                                       Accel
@@ -141,7 +142,29 @@ def meas_laser_vel(state: np.ndarray, R: jnp.ndarray, orientation: jnp.ndarray =
 #                                       Star tracker
 ####################################################################################################
 
-def meas_star_trackcer(q_B2L: np.ndarray, R: jnp.ndarray, orientation: jnp.ndarray = jnp.eye(3)):
+def meas_star_tracker(q_B2L: np.ndarray, R: jnp.ndarray, orientation: jnp.ndarray = jnp.eye(3)):
     del orientation # TODO
     assert R.shape == (4,4)
     return unit(q_B2L + np.random.multivariate_normal(jnp.zeros(4), R))
+
+####################################################################################################
+#                                       Range Tracker
+####################################################################################################
+
+def meas_range_tracker(state, launchsite_pos, R: jnp.ndarray):
+    """[r, v] in inertial"""
+    r_lander = state[0:3]
+    v_lander = state[3:6]
+
+    print(np.array(launchsite_pos).shape)
+    print(R.shape)
+
+    measurements = []
+    for s in launchsite_pos:
+        rel_pos = r_lander - s[0:3]
+        rel_vel = v_lander - s[3:6]  # launch sites might be moving; subtract their vel
+        measurements.append(jnp.concatenate([rel_pos, rel_vel]))
+    
+    return jnp.concatenate(measurements) + np.random.multivariate_normal(np.zeros(len(measurements)), R)
+
+    # return jnp.ravel(measurements) + 
