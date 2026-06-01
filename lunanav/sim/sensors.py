@@ -264,9 +264,9 @@ class Sensor:
 def accelerometer_sensor(noise_std: float) -> Sensor:
     """Accelerometer: measures body-frame specific force (inertial acceleration converted to body frame)."""
     def meas_fn(state: jnp.ndarray, env: SensorEnvironment) -> jnp.ndarray:
-        q_B2L = state[6:10]
-        specific_force_body = quat_apply(conj(q_B2L), env.satellite_specific_force)
-        return specific_force_body / env.mass
+        # q_B2L = state[6:10]
+        # specific_force_body = quat_apply(conj(q_B2L), env.satellite_specific_force)
+        return env.satellite_specific_force / env.mass
 
     return Sensor(
         name=SensorName.ACCELEROMETER,
@@ -321,6 +321,7 @@ def laser_velocity_sensor(noise_std: float) -> Sensor:
 def star_tracker_sensor(noise_std: float) -> Sensor:
     """Star tracker: quaternion (attitude) measurement."""
     def meas_fn(state: jnp.ndarray, env: SensorEnvironment) -> jnp.ndarray:
+        del env
         q_B2L = state[6:10]
         return unit(q_B2L)
 

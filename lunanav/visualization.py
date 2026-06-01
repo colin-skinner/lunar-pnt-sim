@@ -345,15 +345,12 @@ def plot_attitude_relative_vertical(states, t, figsize=(12, 6)):
     Returns:
         matplotlib figure
     """
-    from lunanav.sim.quaternion import quat_apply
-    import numpy as np
-    import matplotlib.pyplot as plt
     
     # Body Z-axis in body frame
     body_z_axis = np.array([0, 0, 1])
     
     # Vertical direction in inertial frame (downward toward moon center)
-    vertical_inertial = np.array([0, 0, -1])
+    vertical_inertial = np.array([0, 0, 1])
     
     tilt_angles = []
     
@@ -400,3 +397,124 @@ def plot_attitude_relative_vertical(states, t, figsize=(12, 6)):
     plt.tight_layout()
     
     return fig, tilt_angles
+
+
+def plot_filter_confidence(Sigma_arr, t, figsize=(15, 10)):
+    """
+    Plot the filter's confidence over time by visualizing the covariance matrix.
+    Lower uncertainty = higher confidence.
+    
+    Args:
+        Sigma_arr: array of shape (n_steps, 13, 13) with covariance matrices
+        t: time array
+        figsize: figure size
+    
+    Returns:
+        matplotlib figure
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
+    n_steps = len(Sigma_arr)
+    
+    # Extract standard deviations for each state component
+    pos_std = np.array([np.sqrt(np.diag(Sigma_arr[i, 0:3, 0:3])) for i in range(n_steps)])
+    vel_std = np.array([np.sqrt(np.diag(Sigma_arr[i, 3:6, 3:6])) for i in range(n_steps)])
+    att_std = np.array([np.sqrt(np.diag(Sigma_arr[i, 6:10, 6:10])) for i in range(n_steps)])
+    ang_vel_std = np.array([np.sqrt(np.diag(Sigma_arr[i, 10:13, 10:13])) for i in range(n_steps)])
+    
+    # Overall metrics
+    trace = np.array([np.trace(Sigma_arr[i]) for i in range(n_steps)])
+    frobenius = np.array([np.linalg.norm(Sigma_arr[i], 'fro') for i in range(n_steps)])
+    
+    # Create figure with subplots
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(4, 2, hspace=0.35, wspace=0.3)
+    
+    # Position uncertainty
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.semilogy(t, pos_std[:, 0], 'r-', label='X', linewidth=1.5)
+    ax1.semilogy(t, pos_std[:, 1], 'g-', label='Y', linewidth=1.5)
+    ax1.semilogy(t, pos_std[:, 2], 'b-', label='Z', linewidth=1.5)
+    ax1.set_ylabel('Std Dev (m)', fontsize=10)
+    ax1.set_title('Position Uncertainty', fontsize=11, fontweight='bold')
+    ax1.grid(alpha=0.3, which='both')
+    ax1.legend(fontsize=9)
+    
+    # Velocity uncertainty
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.semilogy(t, vel_std[:, 0], 'r-', label='VX', linewidth=1.5)
+    ax2.semilogy(t, vel_std[:, 1], 'g-', label='VY', linewidth=1.5)
+    ax2.semilogy(t, vel_std[:, 2], 'b-', label='VZ', linewidth=1.5)
+    ax2.set_ylabel('Std Dev (m/s)', fontsize=10)
+    ax2.set_title('Velocity Uncertainty', fontsize=11, fontweight='bold')
+    ax2.grid(alpha=0.3, which='both')
+    ax2.legend(fontsize=9)
+    
+    # Attitude uncertainty
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.semilogy(t, att_std[:, 0], 'r-', label='q0', linewidth=1.5)
+    ax3.semilogy(t, att_std[:, 1], 'g-', label='q1', linewidth=1.5)
+    ax3.semilogy(t, att_std[:, 2], 'b-', label='q2', linewidth=1.5)
+    ax3.semilogy(t, att_std[:, 3], 'orange', label='q3', linewidth=1.5)
+    ax3.set_ylabel('Std Dev', fontsize=10)
+    ax3.set_title('Attitude (Quaternion) Uncertainty', fontsize=11, fontweight='bold')
+    ax3.grid(alpha=0.3, which='both')
+    ax3.legend(fontsize=9)
+    
+    # Angular velocity uncertainty
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.semilogy(t, ang_vel_std[:, 0], 'r-', label='WX', linewidth=1.5)
+    ax4.semilogy(t, ang_vel_std[:, 1], 'g-', label='WY', linewidth=1.5)
+    ax4.semilogy(t, ang_vel_std[:, 2], 'b-', label='WZ', linewidth=1.5)
+    ax4.set_ylabel('Std Dev (rad/s)', fontsize=10)
+    ax4.set_title('Angular Velocity Uncertainty', fontsize=11, fontweight='bold')
+    ax4.grid(alpha=0.3, which='both')
+    ax4.legend(fontsize=9)
+    
+    # Overall trace (sum of all variances)
+    ax5 = fig.add_subplot(gs[2, 0])
+    ax5.semilogy(t, trace, 'purple', linewidth=2.5, label='Trace(Σ)')
+    ax5.set_ylabel('Trace (overall variance)', fontsize=10)
+    ax5.set_title('Overall Filter Confidence (Lower = More Confident)', fontsize=11, fontweight='bold')
+    ax5.grid(alpha=0.3, which='both')
+    ax5.legend(fontsize=10)
+    
+    # Frobenius norm (total uncertainty)
+    ax6 = fig.add_subplot(gs[2, 1])
+    ax6.semilogy(t, frobenius, 'darkblue', linewidth=2.5, label='||Σ||_F')
+    ax6.set_ylabel('Frobenius Norm', fontsize=10)
+    ax6.set_title('Total Uncertainty (Frobenius Norm)', fontsize=11, fontweight='bold')
+    ax6.grid(alpha=0.3, which='both')
+    ax6.legend(fontsize=10)
+    
+    # Position uncertainty combined (norm of position variance)
+    ax7 = fig.add_subplot(gs[3, 0])
+    pos_uncertainty = np.array([np.linalg.norm(pos_std[i]) for i in range(n_steps)])
+    vel_uncertainty = np.array([np.linalg.norm(vel_std[i]) for i in range(n_steps)])
+    ax7.semilogy(t, pos_uncertainty, 'b-', linewidth=2, label='Position', marker='o', markersize=2, markevery=50)
+    ax7.semilogy(t, vel_uncertainty, 'r-', linewidth=2, label='Velocity', marker='s', markersize=2, markevery=50)
+    ax7.set_ylabel('Std Dev Magnitude', fontsize=10)
+    ax7.set_xlabel('Time (s)', fontsize=10)
+    ax7.set_title('Combined Position & Velocity Uncertainty', fontsize=11, fontweight='bold')
+    ax7.grid(alpha=0.3, which='both')
+    ax7.legend(fontsize=10)
+    
+    # Confidence indicator: inverse of uncertainty (higher = more confident)
+    ax8 = fig.add_subplot(gs[3, 1])
+    # Use log scale inverted to show confidence visually
+    confidence = 1.0 / (1.0 + trace)  # Normalize to [0, 1]
+    ax8.fill_between(t, 0, confidence, alpha=0.5, color='green', label='Confidence')
+    ax8.plot(t, confidence, 'g-', linewidth=2)
+    ax8.set_ylabel('Confidence Score', fontsize=10)
+    ax8.set_xlabel('Time (s)', fontsize=10)
+    ax8.set_title('Filter Confidence Level (Higher = More Confident)', fontsize=11, fontweight='bold')
+    ax8.set_ylim([0, 1])
+    ax8.grid(alpha=0.3)
+    ax8.legend(fontsize=10)
+    
+    fig.suptitle('EKF Covariance Matrix Evolution - Filter Confidence Over Time', 
+                 fontsize=14, fontweight='bold', y=0.995)
+    
+    return fig
+

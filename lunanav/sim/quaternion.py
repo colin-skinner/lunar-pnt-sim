@@ -170,7 +170,7 @@ def mul(q1: jnp.ndarray, q2: jnp.ndarray):
 @jax.jit
 def quat_apply(quat: jnp.ndarray, v: jnp.ndarray, passive=True):
 
-    v_quat = jnp.array([0,*v])
+    v_quat = jnp.concatenate([jnp.array([0.0]), jnp.asarray(v)])  # (4,)
 
     if passive:   
 
