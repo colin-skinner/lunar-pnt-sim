@@ -76,8 +76,8 @@ def reverse_sim_results(results: SimResults):
         
         # Negate forces and torques
         reversed_results.force_N[i] = results.force_N[forward_idx]
-        reversed_results.torque_Nm[i] = -results.torque_Nm[forward_idx]
-        reversed_results.u[i] = -results.u[forward_idx]
+        reversed_results.torque_Nm[i] = results.torque_Nm[forward_idx]
+        reversed_results.u[i] = results.u[forward_idx]
     
     return reversed_results
 

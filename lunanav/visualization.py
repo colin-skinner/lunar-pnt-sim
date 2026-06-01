@@ -264,75 +264,133 @@ def visualize_trajectory(
     return fig
 
 def plot_accelerometer(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, ax = plt.subplots(figsize=(15, 3))
-    for dim in range(3):
-        ax.plot(results.t, measurements_clean[sensor_name.ACCELEROMETER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (dim {dim})' if dim == 0 else '')
-        ax.plot(results.t, measurements_noisy[sensor_name.ACCELEROMETER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (dim {dim})' if dim == 0 else '')
-    ax.set_ylabel('Accelerometer (m/s²)')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+    fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
+    axes_labels = ['X (Body)', 'Y (Body)', 'Z (Body)']
+    colors = ['#e74c3c', '#3498db', '#2ecc71']
+
+    for ax, dim, label, color in zip(axes, range(3), axes_labels, colors):
+        ax.plot(results.t, measurements_clean[sensor_name.ACCELEROMETER][:, dim], color=color, linewidth=2.5, label='True')
+        ax.scatter(results.t, measurements_noisy[sensor_name.ACCELEROMETER][:, dim], s=8, alpha=0.4, color=color, label='Noisy')
+        ax.set_ylabel(f'{label}\n(m/s²)', fontsize=11, fontweight='bold')
+        ax.grid(True, alpha=0.2, linestyle='--')
+        ax.legend(loc='upper right', fontsize=9)
+
+    axes[-1].set_xlabel('Time (s)', fontsize=11)
+    fig.suptitle('Accelerometer Measurements', fontsize=13, fontweight='bold', y=0.995)
+    plt.tight_layout()
     return fig
 
 def plot_gyroscope(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, ax = plt.subplots(figsize=(15, 3))
-    for dim in range(3):
-        ax.plot(results.t, measurements_clean[sensor_name.GYROSCOPE][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (dim {dim})' if dim == 0 else '')
-        ax.plot(results.t, measurements_noisy[sensor_name.GYROSCOPE][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (dim {dim})' if dim == 0 else '')
-    ax.set_ylabel('Gyroscope (rad/s)')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+    fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
+    axes_labels = ['X (Body Roll)', 'Y (Body Pitch)', 'Z (Body Yaw)']
+    colors = ['#e74c3c', '#3498db', '#2ecc71']
+
+    for ax, dim, label, color in zip(axes, range(3), axes_labels, colors):
+        ax.plot(results.t, measurements_clean[sensor_name.GYROSCOPE][:, dim], color=color, linewidth=2.5, label='True')
+        ax.scatter(results.t, measurements_noisy[sensor_name.GYROSCOPE][:, dim], s=8, alpha=0.4, color=color, label='Noisy')
+        ax.set_ylabel(f'{label}\n(rad/s)', fontsize=11, fontweight='bold')
+        ax.grid(True, alpha=0.2, linestyle='--')
+        ax.legend(loc='upper right', fontsize=9)
+
+    axes[-1].set_xlabel('Time (s)', fontsize=11)
+    fig.suptitle('Gyroscope Measurements', fontsize=13, fontweight='bold', y=0.995)
+    plt.tight_layout()
     return fig
 
 def plot_laser_altimeter(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, ax = plt.subplots(figsize=(15, 3))
-    for dim in range(4):
-        ax.plot(results.t, measurements_clean[sensor_name.LASER_ALTIMETER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (beam {dim})' if dim == 0 else '')
-        ax.plot(results.t, measurements_noisy[sensor_name.LASER_ALTIMETER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (beam {dim})' if dim == 0 else '')
-    ax.set_ylabel('Laser Altimeter (m)')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+    fig, ax = plt.subplots(figsize=(14, 5))
+    colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12']
+
+    for beam in range(4):
+        ax.plot(results.t, measurements_clean[sensor_name.LASER_ALTIMETER][:, beam],
+                color=colors[beam], linewidth=2.5, label=f'Beam {beam} (clean)', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy[sensor_name.LASER_ALTIMETER][:, beam],
+                  s=5, alpha=0.15, color=colors[beam])
+
+    ax.set_xlabel('Time (s)', fontsize=11)
+    ax.set_ylabel('Distance to Surface (m)', fontsize=11, fontweight='bold')
+    ax.set_title('Laser Altimeter - Four Beam Measurements', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.2, linestyle='--')
+    ax.legend(loc='best', fontsize=10, ncol=4)
+    plt.tight_layout()
     return fig
 
 def plot_laser_velocity(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, ax = plt.subplots(figsize=(15, 3))
-    for dim in range(4):
-        ax.plot(results.t, measurements_clean[sensor_name.LASER_VELOCITY][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (beam {dim})' if dim == 0 else '')
-        ax.plot(results.t, measurements_noisy[sensor_name.LASER_VELOCITY][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (beam {dim})' if dim == 0 else '')
-    ax.set_ylabel('Laser Velocity (m/s)')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+    fig, ax = plt.subplots(figsize=(14, 5))
+    colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12']
+
+    for beam in range(4):
+        ax.plot(results.t, measurements_clean[sensor_name.LASER_VELOCITY][:, beam],
+                color=colors[beam], linewidth=2.5, label=f'Beam {beam} (clean)', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy[sensor_name.LASER_VELOCITY][:, beam],
+                  s=5, alpha=0.15, color=colors[beam])
+
+    ax.set_xlabel('Time (s)', fontsize=11)
+    ax.set_ylabel('Range Rate (m/s)', fontsize=11, fontweight='bold')
+    ax.set_title('Laser Velocity (Doppler) - Four Beam Measurements', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.2, linestyle='--')
+    ax.axhline(0, color='k', linestyle='--', alpha=0.3)
+    ax.legend(loc='best', fontsize=10, ncol=4)
+    plt.tight_layout()
     return fig
 
 def plot_star_tracker(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, ax = plt.subplots(figsize=(15, 3))
-    for dim in range(4):
-        ax.plot(results.t, measurements_clean[sensor_name.STAR_TRACKER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (q{dim})' if dim == 0 else '')
-        ax.plot(results.t, measurements_noisy[sensor_name.STAR_TRACKER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (q{dim})' if dim == 0 else '')
-    ax.set_ylabel('Star Tracker (quaternion)')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+    fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
+    labels = ['q0 (scalar)', 'q1 (x)', 'q2 (y)', 'q3 (z)']
+    colors = ['#9b59b6', '#e74c3c', '#3498db', '#2ecc71']
+
+    for ax, dim, label, color in zip(axes, range(4), labels, colors):
+        ax.plot(results.t, measurements_clean[sensor_name.STAR_TRACKER][:, dim],
+                color=color, linewidth=2.5, label='True')
+        ax.scatter(results.t, measurements_noisy[sensor_name.STAR_TRACKER][:, dim],
+                  s=8, alpha=0.3, color=color, label='Noisy')
+        ax.set_ylabel(label, fontsize=11, fontweight='bold')
+        ax.grid(True, alpha=0.2, linestyle='--')
+        ax.axhline(0, color='k', linestyle='--', alpha=0.2)
+        ax.legend(loc='upper right', fontsize=9)
+
+    axes[-1].set_xlabel('Time (s)', fontsize=11)
+    fig.suptitle('Star Tracker - Quaternion Attitude Measurements', fontsize=13, fontweight='bold', y=0.995)
+    plt.tight_layout()
     return fig
 
 def plot_doppler(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, ax = plt.subplots(figsize=(15, 3))
+    fig, ax = plt.subplots(figsize=(14, 5))
     n_sats = measurements_clean[sensor_name.DOPPLER].shape[1]
+    colors = plt.cm.tab10(np.linspace(0, 1, n_sats))
+
     for sat in range(n_sats):
-        ax.plot(results.t, measurements_clean[sensor_name.DOPPLER][:, sat], 'k-', linewidth=2, alpha=0.7, label=f'Clean (sat {sat})' if sat == 0 else '')
-        ax.plot(results.t, measurements_noisy[sensor_name.DOPPLER][:, sat], 'r.', markersize=2, alpha=0.5, label=f'Noisy (sat {sat})' if sat == 0 else '')
-    ax.set_ylabel('Doppler (m/s)')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+        ax.plot(results.t, measurements_clean[sensor_name.DOPPLER][:, sat],
+                color=colors[sat], linewidth=2.5, label=f'Sat {sat} (clean)', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy[sensor_name.DOPPLER][:, sat],
+                  s=5, alpha=0.15, color=colors[sat])
+
+    ax.set_xlabel('Time (s)', fontsize=11)
+    ax.set_ylabel('Doppler Shift (m/s)', fontsize=11, fontweight='bold')
+    ax.set_title('Doppler Measurements from Satellites', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.2, linestyle='--')
+    ax.axhline(0, color='k', linestyle='--', alpha=0.3)
+    ax.legend(loc='best', fontsize=10)
+    plt.tight_layout()
     return fig
 
 def plot_range_tracker(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, ax = plt.subplots(figsize=(15, 3))
+    fig, ax = plt.subplots(figsize=(14, 5))
     n_sats = measurements_clean[sensor_name.RANGE_TRACKER].shape[1]
+    colors = plt.cm.tab10(np.linspace(0, 1, n_sats))
+
     for sat in range(n_sats):
-        ax.plot(results.t, measurements_clean[sensor_name.RANGE_TRACKER][:, sat], 'k-', linewidth=2, alpha=0.7, label=f'Clean (sat {sat})' if sat == 0 else '')
-        ax.plot(results.t, measurements_noisy[sensor_name.RANGE_TRACKER][:, sat], 'r.', markersize=2, alpha=0.5, label=f'Noisy (sat {sat})' if sat == 0 else '')
-    ax.set_ylabel('Doppler (m/s)')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
+        ax.plot(results.t, measurements_clean[sensor_name.RANGE_TRACKER][:, sat],
+                color=colors[sat], linewidth=2.5, label=f'Sat {sat} (clean)', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy[sensor_name.RANGE_TRACKER][:, sat],
+                  s=5, alpha=0.15, color=colors[sat])
+
+    ax.set_xlabel('Time (s)', fontsize=11)
+    ax.set_ylabel('Range to Satellite (m)', fontsize=11, fontweight='bold')
+    ax.set_title('Range Tracker Measurements to Satellites', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.2, linestyle='--')
+    ax.legend(loc='best', fontsize=10)
+    plt.tight_layout()
     return fig
 
 def plot_measurements(measurements_clean, measurements_noisy, results, sensor_suite: SensorSuite):
