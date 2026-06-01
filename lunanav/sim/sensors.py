@@ -21,40 +21,40 @@ class SensorName(Enum):
     TERRAIN_RELATIVE_NAV = "terrain_relative_nav"
 
 
-@dataclass
-class SensorNoises:
-    accel: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
-    gyro: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
-    laser_alt: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
-    laser_vel: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
-    star_tracker: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
-    range_tracker: np.ndarray = field(default_factory=lambda: np.zeros((6,6)))
+# @dataclass
+# class SensorNoises:
+#     accel: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
+#     gyro: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
+#     laser_alt: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
+#     laser_vel: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
+#     star_tracker: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
+#     range_tracker: np.ndarray = field(default_factory=lambda: np.zeros((6,6)))
 
-####################################################################################################
-#                                       Accel
-####################################################################################################
+# ####################################################################################################
+# #                                       Accel
+# ####################################################################################################
 
-def meas_accel(accel_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
-    """Measure acceleration with additive Gaussian noise."""
-    del orientation  # TODO
-    if R.shape != (3, 3):
-        raise ValueError(f"Expected R shape (3,3), got {R.shape}")
-    return accel_body + np.random.multivariate_normal(np.zeros(3), R)
+# def meas_accel(accel_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
+#     """Measure acceleration with additive Gaussian noise."""
+#     del orientation  # TODO
+#     if R.shape != (3, 3):
+#         raise ValueError(f"Expected R shape (3,3), got {R.shape}")
+#     return accel_body + np.random.multivariate_normal(np.zeros(3), R)
 
-####################################################################################################
-#                                       Gyro
-####################################################################################################
+# ####################################################################################################
+# #                                       Gyro
+# ####################################################################################################
 
-def meas_gyro(gyro_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
-    """Measure angular velocity with additive Gaussian noise."""
-    del orientation  # TODO
-    if R.shape != (3, 3):
-        raise ValueError(f"Expected R shape (3,3), got {R.shape}")
-    return gyro_body + np.random.multivariate_normal(np.zeros(3), R)
+# def meas_gyro(gyro_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
+#     """Measure angular velocity with additive Gaussian noise."""
+#     del orientation  # TODO
+#     if R.shape != (3, 3):
+#         raise ValueError(f"Expected R shape (3,3), got {R.shape}")
+#     return gyro_body + np.random.multivariate_normal(np.zeros(3), R)
 
-####################################################################################################
-#                                       Line-of-sight Distance
-####################################################################################################
+# ####################################################################################################
+# #                                       Line-of-sight Distance
+# ####################################################################################################
 ANGLE = 25
 los_vectors = jnp.array([
     quat_apply(angle_axis_to_q(ANGLE, [-1,1,0], degrees=True), [0,0,-1]),
@@ -84,54 +84,54 @@ def dist_from_los(state: jnp.ndarray) -> jnp.ndarray:
 
     return jnp.array(distances)
 
-# """Could be a better one"""
-# def dist_from_los(state):
-#     """
-#     Find intersection of LOS rays with lunar sphere.
-#     LOS ray: r + t * d, where d is LOS direction in inertial frame.
-#     Sphere: |x| = R_MOON.
+# # """Could be a better one"""
+# # def dist_from_los(state):
+# #     """
+# #     Find intersection of LOS rays with lunar sphere.
+# #     LOS ray: r + t * d, where d is LOS direction in inertial frame.
+# #     Sphere: |x| = R_MOON.
     
-#     Solve: |r + t*d|^2 = R_MOON^2
-#     Quadratic in t: t^2 + 2*(r·d)*t + |r|^2 - R_MOON^2 = 0
-#     """
-#     r, q_B2L = state[0:3], state[6:10]
-#     vecs_body = get_los_vectors()
-#     distances = []
+# #     Solve: |r + t*d|^2 = R_MOON^2
+# #     Quadratic in t: t^2 + 2*(r·d)*t + |r|^2 - R_MOON^2 = 0
+# #     """
+# #     r, q_B2L = state[0:3], state[6:10]
+# #     vecs_body = get_los_vectors()
+# #     distances = []
 
-#     for v in vecs_body:
-#         d = quat_apply(q_B2L, v)
-#         d = d / jnp.linalg.norm(d)  # ensure unit vector
+# #     for v in vecs_body:
+# #         d = quat_apply(q_B2L, v)
+# #         d = d / jnp.linalg.norm(d)  # ensure unit vector
         
-#         # Quadratic coefficients
-#         b = jnp.dot(r, d)
-#         c = jnp.dot(r, r) - R_MOON**2
+# #         # Quadratic coefficients
+# #         b = jnp.dot(r, d)
+# #         c = jnp.dot(r, r) - R_MOON**2
         
-#         discriminant = b**2 - c
+# #         discriminant = b**2 - c
         
-#         # Two solutions: t = -b ± sqrt(discriminant)
-#         # Pick the smaller positive one (closer intersection)
-#         t = -b - jnp.sqrt(jnp.maximum(discriminant, 0))
+# #         # Two solutions: t = -b ± sqrt(discriminant)
+# #         # Pick the smaller positive one (closer intersection)
+# #         t = -b - jnp.sqrt(jnp.maximum(discriminant, 0))
         
-#         # If discriminant < 0, no intersection (LOS misses surface)
-#         dist = jnp.where(discriminant > 0, t, jnp.nan)
-#         # If t < 0, surface is behind us — also invalid
-#         dist = jnp.where(t > 0, dist, jnp.nan)
+# #         # If discriminant < 0, no intersection (LOS misses surface)
+# #         dist = jnp.where(discriminant > 0, t, jnp.nan)
+# #         # If t < 0, surface is behind us — also invalid
+# #         dist = jnp.where(t > 0, dist, jnp.nan)
         
-#         distances.append(dist)
+# #         distances.append(dist)
 
-#     return jnp.array(distances)
+# #     return jnp.array(distances)
 
-def meas_laser_alt(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
-    """Measure laser range with additive Gaussian noise."""
-    del orientation  # TODO
-    if R.shape != (4, 4):
-        raise ValueError(f"Expected R shape (4,4), got {R.shape}")
-    return dist_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
+# def meas_laser_alt(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
+#     """Measure laser range with additive Gaussian noise."""
+#     del orientation  # TODO
+#     if R.shape != (4, 4):
+#         raise ValueError(f"Expected R shape (4,4), got {R.shape}")
+#     return dist_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
 
 
-####################################################################################################
-#                                       Line-of-sight Velocity
-####################################################################################################
+# ####################################################################################################
+# #                                       Line-of-sight Velocity
+# ####################################################################################################
 
 @jax.jit
 def dist_rate_from_los(state: jnp.ndarray) -> jnp.ndarray:
@@ -152,45 +152,45 @@ def dist_rate_from_los(state: jnp.ndarray) -> jnp.ndarray:
 
     return dD_dr @ drdt + dD_dq @ dqdt  # (4,)
 
-def meas_laser_vel(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
-    """Measure laser range-rate with additive Gaussian noise."""
-    del orientation  # TODO
-    if R.shape != (4, 4):
-        raise ValueError(f"Expected R shape (4,4), got {R.shape}")
-    return dist_rate_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
+# def meas_laser_vel(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
+#     """Measure laser range-rate with additive Gaussian noise."""
+#     del orientation  # TODO
+#     if R.shape != (4, 4):
+#         raise ValueError(f"Expected R shape (4,4), got {R.shape}")
+#     return dist_rate_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
 
-####################################################################################################
-#                                       Star tracker
-####################################################################################################
+# ####################################################################################################
+# #                                       Star tracker
+# ####################################################################################################
 
-def meas_star_tracker(q_B2L: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
-    """Measure attitude (quaternion) with additive Gaussian noise."""
-    del orientation  # TODO
-    if R.shape != (4, 4):
-        raise ValueError(f"Expected R shape (4,4), got {R.shape}")
-    return unit(q_B2L + np.random.multivariate_normal(np.zeros(4), R))
+# def meas_star_tracker(q_B2L: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
+#     """Measure attitude (quaternion) with additive Gaussian noise."""
+#     del orientation  # TODO
+#     if R.shape != (4, 4):
+#         raise ValueError(f"Expected R shape (4,4), got {R.shape}")
+#     return unit(q_B2L + np.random.multivariate_normal(np.zeros(4), R))
 
-####################################################################################################
-#                                       Range Tracker
-####################################################################################################
+# ####################################################################################################
+# #                                       Range Tracker
+# ####################################################################################################
 
-def meas_range_tracker(state, launchsite_pos, R: jnp.ndarray):
-    """[r, v] in inertial"""
-    r_lander = state[0:3]
-    v_lander = state[3:6]
+# def meas_range_tracker(state, launchsite_pos, R: jnp.ndarray):
+#     """[r, v] in inertial"""
+#     r_lander = state[0:3]
+#     v_lander = state[3:6]
 
-    print(np.array(launchsite_pos).shape)
-    print(R.shape)
+#     print(np.array(launchsite_pos).shape)
+#     print(R.shape)
 
-    measurements = []
-    for s in launchsite_pos:
-        rel_pos = r_lander - s[0:3]
-        rel_vel = v_lander - s[3:6]  # launch sites might be moving; subtract their vel
-        measurements.append(jnp.concatenate([rel_pos, rel_vel]))
+#     measurements = []
+#     for s in launchsite_pos:
+#         rel_pos = r_lander - s[0:3]
+#         rel_vel = v_lander - s[3:6]  # launch sites might be moving; subtract their vel
+#         measurements.append(jnp.concatenate([rel_pos, rel_vel]))
 
-    return jnp.concatenate(measurements) + np.random.multivariate_normal(np.zeros(len(measurements)), R)
+#     return jnp.concatenate(measurements) + np.random.multivariate_normal(np.zeros(len(measurements)), R)
 
-    # return jnp.ravel(measurements) +
+#     # return jnp.ravel(measurements) +
 
 
 ####################################################################################################

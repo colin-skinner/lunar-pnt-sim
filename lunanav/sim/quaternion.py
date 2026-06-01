@@ -45,7 +45,21 @@ def hamilton_product(q: jnp.ndarray, w: jnp.ndarray | list):
 # ----- Quaternion and Axis rotation -----#
 @jax.jit
 def angle_axis_to_q(angle: float, axis: jnp.ndarray | list, degrees = False):
+    """_summary_
 
+    Parameters
+    ----------
+    angle : float
+    axis : jnp.ndarray | list
+        (3,)
+    degrees : bool, optional
+        whether degrees or not, by default False
+
+    Returns
+    -------
+    jnp.ndarray
+        quaternion (4,)
+    """
     angle_rad = jnp.where(degrees, angle * DEG_TO_RAD, angle)
     unit_axis = unit(axis)
 

@@ -330,3 +330,73 @@ def plot_measurements(measurements_clean: dict, measurements_noisy: dict, result
     plt.tight_layout()
 
     return fig
+
+
+def plot_attitude_relative_vertical(states, t, figsize=(12, 6)):
+    """
+    Plot the angle between the body's Z-axis and the vertical (downward) direction.
+    This shows how tilted the lander is relative to vertical during landing.
+    
+    Args:
+        states: array of shape (n_steps, 13) with [r, v, q, w]
+        t: time array
+        figsize: figure size
+    
+    Returns:
+        matplotlib figure
+    """
+    from lunanav.sim.quaternion import quat_apply
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
+    # Body Z-axis in body frame
+    body_z_axis = np.array([0, 0, 1])
+    
+    # Vertical direction in inertial frame (downward toward moon center)
+    vertical_inertial = np.array([0, 0, -1])
+    
+    tilt_angles = []
+    
+    for i in range(len(states)):
+        q_B2I = states[i, 6:10]  # quaternion from body to inertial
+        
+        # Transform body Z-axis to inertial frame
+        body_z_inertial = quat_apply(q_B2I, body_z_axis)
+        
+        # Calculate angle between body Z and vertical
+        # Using dot product: cos(theta) = a · b / (|a||b|)
+        cos_angle = np.dot(body_z_inertial, vertical_inertial) / (
+            np.linalg.norm(body_z_inertial) * np.linalg.norm(vertical_inertial)
+        )
+        # Clamp to [-1, 1] to avoid numerical issues
+        cos_angle = np.clip(cos_angle, -1, 1)
+        angle_rad = np.arccos(cos_angle)
+        angle_deg = np.degrees(angle_rad)
+        
+        tilt_angles.append(angle_deg)
+    
+    tilt_angles = np.array(tilt_angles)
+    
+    # Create plots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
+    
+    # Tilt angle over time
+    ax1.plot(t, tilt_angles, 'b-', linewidth=2)
+    ax1.fill_between(t, 0, tilt_angles, alpha=0.3)
+    ax1.set_ylabel('Tilt Angle (degrees)', fontsize=12)
+    ax1.set_title('Lander Attitude: Tilt Angle Relative to Vertical', fontsize=14)
+    ax1.grid(alpha=0.3)
+    ax1.axhline(0, color='k', linestyle='--', alpha=0.3, label='Vertical')
+    ax1.legend()
+    
+    # Altitude vs tilt angle (phase plot)
+    altitude = states[:, 2]
+    ax2.plot(altitude, tilt_angles, 'r-', linewidth=2)
+    ax2.set_xlabel('Altitude (m)', fontsize=12)
+    ax2.set_ylabel('Tilt Angle (degrees)', fontsize=12)
+    ax2.set_title('Tilt Angle vs Altitude', fontsize=14)
+    ax2.grid(alpha=0.3)
+    
+    plt.tight_layout()
+    
+    return fig, tilt_angles
