@@ -17,7 +17,7 @@ sys.path.append("../..")
 from lunanav.sim.quaternion import angle_axis_to_q, unit, quat_apply, conj
 from lunanav.plotting import plot_state_vector, debug_3d, plot_control_effort, plot_4, plot_3
 from lunanav.constants import GM_MOON, R_MOON
-from lunanav.sim.simulator import lander_motion, linearized_lander_motion
+from lunanav.sim.simulator import lander_motion, linearized_lander_motion, lander_motion_inertial
 from lunanav.visualization import visualize_trajectory
 
 moon_offset =  [0,0,R_MOON,0,0,0,0,0,0,0,0,0,0]
@@ -128,8 +128,8 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
     for i in range(max_iters):
         
         # if i % 10 == 0 or i < 5:
-        print(f"===================== BEFORE iteration {i} =====================")
-        debug_trajectory(s_bar, u_bar, s_goal, i, N, dt, mass=100)
+        # print(f"===================== BEFORE iteration {i} =====================")
+        # debug_trajectory(s_bar, u_bar, s_goal, i, N, dt, mass=100)
 
         # PART (c) ############################################################
 
@@ -251,8 +251,8 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
             print("Stopping due to numerical issues, using previous solution")
             break
 
-        print(f"===================== AFTER BACKWARD {i} =====================")
-        debug_trajectory(s_bar, u_bar, s_goal, i, N, dt, mass=100)
+        # print(f"===================== AFTER BACKWARD {i} =====================")
+        # debug_trajectory(s_bar, u_bar, s_goal, i, N, dt, mass=100)
 
         # Forward pass
         # for k in range(N):
@@ -297,8 +297,8 @@ def ilqr(f, s0, s_goal, N, Q, R, QN, eps=1e-3, max_iters=1000):
             converged = True
             break
 
-        print(f"===================== AFTER FORWARD {i} =====================")
-        debug_trajectory(s_bar, u_bar, s_goal, i, N, dt, mass=100)
+        # print(f"===================== AFTER FORWARD {i} =====================")
+        # debug_trajectory(s_bar, u_bar, s_goal, i, N, dt, mass=100)
         # breakpoint()
 
         #######################################################################
@@ -406,7 +406,7 @@ if __name__ == "__main__":
     # input: force_body, torque_body
     # t: float, state: jnp.ndarray, disturbances: jnp.ndarray, mass_kg: float, I: np.ndarray):
     def deriv_wrapper(s, u):
-        return lander_motion(s, u[0:3], u[3:6], dt, mass, I)
+        return lander_motion_inertial(s, u[0:3], u[3:6], dt, mass, I)
 
     f = jax.jit(deriv_wrapper)
     # fd = jax.jit(lambda s, u, dt=dt: s + dt * f(s, u))
