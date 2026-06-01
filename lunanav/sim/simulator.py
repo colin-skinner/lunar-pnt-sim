@@ -52,6 +52,34 @@ class SimParams:
     dt: float = 0.1  # time step (seconds)
     t_end: float = 100.0  # max simulation time
 
+
+def reverse_sim_results(results: SimResults):
+    
+    n = results.nsteps
+    reversed_results = SimResults(n)
+    reversed_results.nsteps = n
+    
+    # Reverse time
+    reversed_results.t = results.t.copy()  # Instead of reversing it
+    
+    # Reverse and negate velocities/angular velocities
+    for i in range(n):
+        forward_idx = n - 1 - i
+        state_rev = results.states[forward_idx].copy()
+        
+        # Keep position and quaternion, negate velocities
+        reversed_results.states[i, 0:3] = state_rev[0:3]      # position (same)
+        reversed_results.states[i, 3:6] = -state_rev[3:6]     # velocity (negated)
+        reversed_results.states[i, 6:10] = state_rev[6:10]    # quaternion (same)
+        reversed_results.states[i, 10:13] = -state_rev[10:13] # angular velocity (negated)
+        
+        # Negate forces and torques
+        reversed_results.force_N[i] = -results.force_N[forward_idx]
+        reversed_results.torque_Nm[i] = -results.torque_Nm[forward_idx]
+        reversed_results.u[i] = -results.u[forward_idx]
+    
+    return reversed_results
+
 ####################################################################################################
 #                                       Rigid and motion
 ####################################################################################################
