@@ -40,7 +40,7 @@ class SimMeasurements:
     laser_alt: np.ndarray
     laser_vel: np.ndarray
     star_tracker: np.ndarray
-    range_tracker: list[np.ndarray]
+    # range_tracker: list[np.ndarray]
 
 
 @dataclass
@@ -273,9 +273,9 @@ def calc_measurements(results: SimResults, mass: float, sensor_noises: SensorNoi
     print("Laser vel done")
     q_star_tracker = np.array([meas_star_tracker(state[6:10], sensor_noises.star_tracker) for state in states])
     print("Quat done")
-    r_v_range_tracker = np.array([meas_range_tracker(state, range_tracker_pos, sensor_noises.range_tracker) for state in states])
-    print("Range tracker done")
+    # r_v_range_tracker = np.array([meas_range_tracker(state, range_tracker_pos, sensor_noises.range_tracker) for state in states])
+    # print("Range tracker done")
 
-    measurements = SimMeasurements(accel, gyro, laser_alt, laser_vel, q_star_tracker, r_v_range_tracker)
+    measurements = SimMeasurements(accel, gyro, laser_alt, laser_vel, q_star_tracker)
     
     return measurements
