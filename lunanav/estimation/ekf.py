@@ -11,17 +11,6 @@ from ..sim.simulator import SimParams
 # https://algorithmsbook.com/files/dm.pdf
 
 
-def meas_gyro(state):
-    return state[10:13]
-
-def gyro_jacobian(state):
-    del state
-    J = np.zeros((3,13))
-    J[:,10:13] = np.eye(3)
-    return J
-
-
-
 
 
 @dataclass

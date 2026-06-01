@@ -249,62 +249,73 @@ def visualize_trajectory(
 
     return fig
 
-def plot_accelerometer(measurements_clean, measurements_noisy, results, SensorName: SensorName):
+def plot_accelerometer(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
     fig, ax = plt.subplots(figsize=(15, 3))
     for dim in range(3):
-        ax.plot(results.t, measurements_clean[SensorName.ACCELEROMETER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (dim {dim})' if dim == 0 else '')
-        ax.plot(results.t, measurements_noisy[SensorName.ACCELEROMETER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (dim {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_clean[sensor_name.ACCELEROMETER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (dim {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_noisy[sensor_name.ACCELEROMETER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (dim {dim})' if dim == 0 else '')
     ax.set_ylabel('Accelerometer (m/s²)')
     ax.grid(True, alpha=0.3)
     ax.legend()
     return fig
 
-def plot_gyroscope(measurements_clean, measurements_noisy, results, SensorName):
+def plot_gyroscope(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
     fig, ax = plt.subplots(figsize=(15, 3))
     for dim in range(3):
-        ax.plot(results.t, measurements_clean[SensorName.GYROSCOPE][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (dim {dim})' if dim == 0 else '')
-        ax.plot(results.t, measurements_noisy[SensorName.GYROSCOPE][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (dim {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_clean[sensor_name.GYROSCOPE][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (dim {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_noisy[sensor_name.GYROSCOPE][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (dim {dim})' if dim == 0 else '')
     ax.set_ylabel('Gyroscope (rad/s)')
     ax.grid(True, alpha=0.3)
     ax.legend()
     return fig
 
-def plot_laser_altimeter(measurements_clean, measurements_noisy, results, SensorName):
+def plot_laser_altimeter(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
     fig, ax = plt.subplots(figsize=(15, 3))
     for dim in range(4):
-        ax.plot(results.t, measurements_clean[SensorName.LASER_ALTIMETER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (beam {dim})' if dim == 0 else '')
-        ax.plot(results.t, measurements_noisy[SensorName.LASER_ALTIMETER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (beam {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_clean[sensor_name.LASER_ALTIMETER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (beam {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_noisy[sensor_name.LASER_ALTIMETER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (beam {dim})' if dim == 0 else '')
     ax.set_ylabel('Laser Altimeter (m)')
     ax.grid(True, alpha=0.3)
     ax.legend()
     return fig
 
-def plot_laser_velocity(measurements_clean, measurements_noisy, results, SensorName):
+def plot_laser_velocity(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
     fig, ax = plt.subplots(figsize=(15, 3))
     for dim in range(4):
-        ax.plot(results.t, measurements_clean[SensorName.LASER_VELOCITY][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (beam {dim})' if dim == 0 else '')
-        ax.plot(results.t, measurements_noisy[SensorName.LASER_VELOCITY][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (beam {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_clean[sensor_name.LASER_VELOCITY][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (beam {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_noisy[sensor_name.LASER_VELOCITY][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (beam {dim})' if dim == 0 else '')
     ax.set_ylabel('Laser Velocity (m/s)')
     ax.grid(True, alpha=0.3)
     ax.legend()
     return fig
 
-def plot_star_tracker(measurements_clean, measurements_noisy, results, SensorName):
+def plot_star_tracker(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
     fig, ax = plt.subplots(figsize=(15, 3))
     for dim in range(4):
-        ax.plot(results.t, measurements_clean[SensorName.STAR_TRACKER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (q{dim})' if dim == 0 else '')
-        ax.plot(results.t, measurements_noisy[SensorName.STAR_TRACKER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (q{dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_clean[sensor_name.STAR_TRACKER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (q{dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_noisy[sensor_name.STAR_TRACKER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (q{dim})' if dim == 0 else '')
     ax.set_ylabel('Star Tracker (quaternion)')
     ax.grid(True, alpha=0.3)
     ax.legend()
     return fig
 
-def plot_doppler(measurements_clean, measurements_noisy, results, SensorName):
+def plot_doppler(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
     fig, ax = plt.subplots(figsize=(15, 3))
-    n_sats = measurements_clean[SensorName.DOPPLER].shape[1]
+    n_sats = measurements_clean[sensor_name.DOPPLER].shape[1]
     for sat in range(n_sats):
-        ax.plot(results.t, measurements_clean[SensorName.DOPPLER][:, sat], 'k-', linewidth=2, alpha=0.7, label=f'Clean (sat {sat})' if sat == 0 else '')
-        ax.plot(results.t, measurements_noisy[SensorName.DOPPLER][:, sat], 'r.', markersize=2, alpha=0.5, label=f'Noisy (sat {sat})' if sat == 0 else '')
+        ax.plot(results.t, measurements_clean[sensor_name.DOPPLER][:, sat], 'k-', linewidth=2, alpha=0.7, label=f'Clean (sat {sat})' if sat == 0 else '')
+        ax.plot(results.t, measurements_noisy[sensor_name.DOPPLER][:, sat], 'r.', markersize=2, alpha=0.5, label=f'Noisy (sat {sat})' if sat == 0 else '')
+    ax.set_ylabel('Doppler (m/s)')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    return fig
+
+def plot_range_tracker(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+    fig, ax = plt.subplots(figsize=(15, 3))
+    n_sats = measurements_clean[sensor_name.RANGE_TRACKER].shape[1]
+    for sat in range(n_sats):
+        ax.plot(results.t, measurements_clean[sensor_name.RANGE_TRACKER][:, sat], 'k-', linewidth=2, alpha=0.7, label=f'Clean (sat {sat})' if sat == 0 else '')
+        ax.plot(results.t, measurements_noisy[sensor_name.RANGE_TRACKER][:, sat], 'r.', markersize=2, alpha=0.5, label=f'Noisy (sat {sat})' if sat == 0 else '')
     ax.set_ylabel('Doppler (m/s)')
     ax.grid(True, alpha=0.3)
     ax.legend()
@@ -319,6 +330,7 @@ def plot_measurements(measurements_clean, measurements_noisy, results, sensor_su
         SensorName.LASER_VELOCITY: plot_laser_velocity,
         SensorName.STAR_TRACKER: plot_star_tracker,
         SensorName.DOPPLER: plot_doppler,
+        SensorName.RANGE_TRACKER: plot_range_tracker,
     }
     
     figs = []

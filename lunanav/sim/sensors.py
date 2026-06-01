@@ -18,6 +18,7 @@ class SensorName(Enum):
     LASER_VELOCITY = "laser_velocity"
     STAR_TRACKER = "star_tracker"
     DOPPLER = "doppler"
+    RANGE_TRACKER = "range_tracker"
     TERRAIN_RELATIVE_NAV = "terrain_relative_nav"
 
 
@@ -367,6 +368,26 @@ def doppler_sensor(n_sats: int, noise_std: float) -> Sensor:
 
     return Sensor(
         name=SensorName.DOPPLER,
+        measurement_fn=meas_fn,
+        noise_cov=jnp.eye(n_sats) * (noise_std ** 2),
+        meas_dim=n_sats
+    )
+
+def sat_range_tracker_sensor(n_sats: int, noise_std: float) -> Sensor:
+    """Range (distance) to  (a sat currently) — directly observable position"""
+    
+    def meas_fn(state: jnp.ndarray, env: SensorEnvironment) -> jnp.ndarray:
+        r_lander = state[0:3]
+
+        measurements = []
+        for i in range(n_sats):
+            r_sat = env.satellite_positions[i]
+            distance = norm(r_lander - r_sat)
+            measurements.append(distance)
+        return jnp.array(measurements)
+    
+    return Sensor(
+        name=SensorName.DOPPLER,  # or custom RANGE
         measurement_fn=meas_fn,
         noise_cov=jnp.eye(n_sats) * (noise_std ** 2),
         meas_dim=n_sats
