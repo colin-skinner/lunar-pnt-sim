@@ -1,5 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 from .sim.quaternion import quat_apply
 from .constants import R_MOON
 
@@ -244,5 +245,89 @@ def visualize_trajectory(
         sliders=sliders,
         showlegend=True, hovermode='closest'
     )
+
+    return fig
+
+
+def plot_measurements(measurements_clean: dict, measurements_noisy: dict, results, sensor_suite, lander, figsize: tuple = (15, 14)):
+    """
+    Plot all sensor measurements comparing clean vs noisy data.
+
+    Args:
+        measurements_clean: Dict[timestep][SensorName] -> measurement array
+        measurements_noisy: Dict[timestep][SensorName] -> measurement array (with noise)
+        results: SimResults object with states, forces, torques, and time
+        sensor_suite: SensorSuite object with all sensors
+        lander: RigidBody object (for mass)
+        figsize: Figure size (width, height)
+
+    Returns:
+        matplotlib Figure with 5 subplots (one per sensor type)
+    """
+    from .sim.sensors import SensorName
+
+    fig, axes = plt.subplots(5, 1, figsize=figsize)
+    n_steps = len(measurements_clean)
+
+    # Accelerometer (3 channels)
+    accel_clean = np.array([measurements_clean[i][SensorName.ACCELEROMETER] for i in range(n_steps)])
+    accel_noisy = np.array([measurements_noisy[i][SensorName.ACCELEROMETER] for i in range(n_steps)])
+    accel_true = results.force_N / lander.mass_kg
+    for j in range(3):
+        axes[0].plot(results.t, accel_true[:, j], 'k-', alpha=0.5, linewidth=1.5)
+        axes[0].plot(results.t, accel_noisy[:, j], '.', markersize=1, alpha=0.4)
+    axes[0].set_ylabel("Acceleration (m/s²)")
+    axes[0].set_title("Accelerometer: True (black) vs Noisy (colored dots)")
+    axes[0].grid(alpha=0.3)
+    axes[0].legend(["X (truth)", "Y (truth)", "Z (truth)"], loc="upper right")
+
+    # Gyroscope (3 channels)
+    gyro_clean = np.array([measurements_clean[i][SensorName.GYROSCOPE] for i in range(n_steps)])
+    gyro_noisy = np.array([measurements_noisy[i][SensorName.GYROSCOPE] for i in range(n_steps)])
+    gyro_true = results.states[:, 10:13]
+    for j in range(3):
+        axes[1].plot(results.t, gyro_true[:, j], 'k-', alpha=0.5, linewidth=1.5)
+        axes[1].plot(results.t, gyro_noisy[:, j], '.', markersize=1, alpha=0.4)
+    axes[1].set_ylabel("Angular Velocity (rad/s)")
+    axes[1].set_title("Gyroscope: True (black) vs Noisy (colored dots)")
+    axes[1].grid(alpha=0.3)
+    axes[1].legend(["X (truth)", "Y (truth)", "Z (truth)"], loc="upper right")
+
+    # Laser altimeter (4 channels)
+    laser_alt_clean = np.array([measurements_clean[i][SensorName.LASER_ALTIMETER] for i in range(n_steps)])
+    laser_alt_noisy = np.array([measurements_noisy[i][SensorName.LASER_ALTIMETER] for i in range(n_steps)])
+    for j in range(4):
+        axes[2].plot(results.t, laser_alt_clean[:, j], '-', alpha=0.7, linewidth=1.5, label=f"LOS {j+1} (truth)")
+        axes[2].plot(results.t, laser_alt_noisy[:, j], '.', markersize=1, alpha=0.3)
+    axes[2].set_ylabel("Distance (m)")
+    axes[2].set_title("Laser Altimeter: Clean (lines) vs Noisy (dots)")
+    axes[2].grid(alpha=0.3)
+    axes[2].legend(loc="upper right", ncol=4, fontsize=8)
+
+    # Laser velocity (4 channels)
+    laser_vel_clean = np.array([measurements_clean[i][SensorName.LASER_VELOCITY] for i in range(n_steps)])
+    laser_vel_noisy = np.array([measurements_noisy[i][SensorName.LASER_VELOCITY] for i in range(n_steps)])
+    for j in range(4):
+        axes[3].plot(results.t, laser_vel_clean[:, j], '-', alpha=0.7, linewidth=1.5, label=f"LOS {j+1} (truth)")
+        axes[3].plot(results.t, laser_vel_noisy[:, j], '.', markersize=1, alpha=0.3)
+    axes[3].set_ylabel("Range Rate (m/s)")
+    axes[3].set_title("Laser Velocity: Clean (lines) vs Noisy (dots)")
+    axes[3].grid(alpha=0.3)
+    axes[3].legend(loc="upper right", ncol=4, fontsize=8)
+
+    # Star tracker (quaternion components)
+    star_clean = np.array([measurements_clean[i][SensorName.STAR_TRACKER] for i in range(n_steps)])
+    star_noisy = np.array([measurements_noisy[i][SensorName.STAR_TRACKER] for i in range(n_steps)])
+    star_true = results.states[:, 6:10]
+    for j in range(4):
+        axes[4].plot(results.t, star_true[:, j], 'k-', alpha=0.5, linewidth=1.5)
+        axes[4].plot(results.t, star_noisy[:, j], '.', markersize=1, alpha=0.4)
+    axes[4].set_xlabel("Time (s)")
+    axes[4].set_ylabel("Quaternion Component")
+    axes[4].set_title("Star Tracker (Attitude): True (black) vs Noisy (colored dots)")
+    axes[4].grid(alpha=0.3)
+    axes[4].legend(["q0 (truth)", "q1 (truth)", "q2 (truth)", "q3 (truth)"], loc="upper right")
+
+    plt.tight_layout()
 
     return fig
