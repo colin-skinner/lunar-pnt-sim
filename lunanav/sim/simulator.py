@@ -4,9 +4,10 @@ from jax.numpy.linalg import norm
 from dataclasses import dataclass, field
 import jax.numpy as jnp
 import jax
+from tqdm import tqdm
 
 from .quaternion import unit, quat_apply, conj, hamilton_product, unitize_state
-from .sensors import meas_accel, meas_gyro, meas_laser_alt, meas_laser_vel, meas_star_trackcer, SensorNoises
+# from .sensors import meas_accel, meas_gyro, meas_laser_alt, meas_laser_vel, meas_star_tracker, meas_range_tracker, SensorNoises
 
 from ..constants import GM_MOON, R_MOON
 
@@ -40,6 +41,7 @@ class SimMeasurements:
     laser_alt: np.ndarray
     laser_vel: np.ndarray
     star_tracker: np.ndarray
+    # range_tracker: list[np.ndarray]
 
 
 @dataclass
@@ -50,6 +52,34 @@ class SimParams:
     body: RigidBody = field(default_factory=RigidBody)
     dt: float = 0.1  # time step (seconds)
     t_end: float = 100.0  # max simulation time
+
+
+def reverse_sim_results(results: SimResults):
+    
+    n = results.nsteps
+    reversed_results = SimResults(n)
+    reversed_results.nsteps = n
+    
+    # Reverse time
+    reversed_results.t = results.t.copy()  # Instead of reversing it
+    
+    # Reverse and negate velocities/angular velocities
+    for i in tqdm(range(n)):
+        forward_idx = n - 1 - i
+        state_rev = results.states[forward_idx].copy()
+        
+        # Keep position and quaternion, negate velocities
+        reversed_results.states[i, 0:3] = state_rev[0:3]      # position (same)
+        reversed_results.states[i, 3:6] = -state_rev[3:6]     # velocity (negated)
+        reversed_results.states[i, 6:10] = state_rev[6:10]    # quaternion (same)
+        reversed_results.states[i, 10:13] = -state_rev[10:13] # angular velocity (negated)
+        
+        # Negate forces and torques
+        reversed_results.force_N[i] = results.force_N[forward_idx]
+        reversed_results.torque_Nm[i] = results.torque_Nm[forward_idx]
+        reversed_results.u[i] = results.u[forward_idx]
+    
+    return reversed_results
 
 ####################################################################################################
 #                                       Rigid and motion
@@ -117,6 +147,42 @@ def rk4_next_step(t: float, dt: float, state_prev: float, force_I: jnp.ndarray, 
 ####################################################################################################
 #                                       Actual propagation
 ####################################################################################################
+
+@jax.jit
+def lander_motion_inertial(state: jnp.ndarray, force_I: jnp.ndarray, torque_B: jnp.ndarray, dt: float, mass: float, I: np.ndarray, mu: float = GM_MOON):
+    """_summary_
+
+    Parameters
+    ----------
+    state : jnp.ndarray (13,)
+        Initial state vector [r, v, q, w]
+    force : jnp.ndarray (3,)
+        Force acting on the body (in body frame) `[N]`
+    torque_B : jnp.ndarray (3,)
+        Torque acting on the body (in body frame) `[Nm]`
+    dt : float
+    mass : float
+    I : np.ndarray
+        Body frame
+    mu : float, optional
+        Gravitational parameter (GM) of the central body `[m3/s2]`. If 0, no gravity forces are applied.
+
+    Returns
+    -------
+    jnp.ndarray
+        Next state vector [r, v, q, w]
+    """
+    
+    # Add gravity if need be
+    r = state[0:3]
+    force_I = jnp.where(mu > 0,
+                        force_I - mu * r / norm(r)**3 * mass,
+                        force_I)
+
+    next_state = rk4_next_step(0, dt, state, force_I, torque_B, mass, I)
+    next_state = unitize_state(next_state)
+
+    return next_state
 
 @jax.jit
 def lander_motion(state: jnp.ndarray, force_B: jnp.ndarray, torque_B: jnp.ndarray, dt: float, mass: float, I: np.ndarray, mu: float = GM_MOON):
@@ -190,7 +256,7 @@ def run_sim(state0, nsteps, dt, control_fn, params: SimParams):
     logger.states[0] = state0
 
     final_step = nsteps
-    for step in range(nsteps-1):
+    for step in tqdm(range(nsteps-1)):
         t_curr = logger.t[step]
         state = logger.states[step]
 
@@ -218,21 +284,3 @@ def run_sim(state0, nsteps, dt, control_fn, params: SimParams):
     logger.trunc(final_step)
 
     return logger
-
-def calc_measurements(results: SimResults, mass: float, sensor_noises: SensorNoises = SensorNoises()):
-    states = results.states
-    forces = results.force_N
-
-    accel = np.array([meas_accel(force / mass, sensor_noises.accel, state[6:10]) for force, state in zip(forces, states)])
-    print("Accel done")
-    gyro = np.array([meas_gyro(state[10:13], sensor_noises.gyro, state[6:10]) for state in states]) 
-    print("Gyro done")
-    laser_alt = np.array([meas_laser_alt(state, sensor_noises.laser_alt, state[6:10]) for state in states])
-    print("Laser dist done")
-    laser_vel = np.array([meas_laser_vel(state, sensor_noises.laser_vel, state[6:10]) for state in states])
-    print("Laser vel done")
-    q_star_tracker = np.array([meas_star_trackcer(state[6:10], sensor_noises.star_tracker) for state in states])
-    print("Quat done")
-    measurements = SimMeasurements(accel, gyro, laser_alt, laser_vel, q_star_tracker)
-    
-    return measurements

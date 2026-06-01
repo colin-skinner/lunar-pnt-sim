@@ -1,7 +1,13 @@
 import numpy as np
 import plotly.graph_objects as go
-from .sim.quaternion import quat_apply
+import matplotlib.pyplot as plt
+from numpy.linalg import svd
+import jax
+import jax.numpy as jnp
+from .sim.quaternion import quat_apply, unitize_state
 from .constants import R_MOON
+from .sim.sensors import SensorName, SensorSuite
+from .estimation.ekf import ekf_predict_state_only
 
 # Define specific colors
 x_axis_color = 'red'
@@ -14,14 +20,14 @@ z_axis_color = 'blue'
 #                              showscale=False, name='Moon', hoverinfo='skip')
 
 def moon_surface(radius=R_MOON, offset: np.ndarray = np.zeros(3), resolution=25, color='#444444'):
-    """Returns go.Surface of Moon as a sphere"""
+    """Returns go.Surface of Moon as a sphere. Offset is how far UP the coordinate system is shifted"""
     # Create sphere using spherical coordinates
     u = np.linspace(0, 2 * np.pi, resolution)
     v = np.linspace(0, np.pi, resolution)
     
-    x = radius * np.outer(np.cos(u), np.sin(v)) + offset[0]
-    y = radius * np.outer(np.sin(u), np.sin(v)) + offset[1]
-    z = radius * np.outer(np.ones(np.size(u)), np.cos(v)) + offset[2]
+    x = radius * np.outer(np.cos(u), np.sin(v)) - offset[0]
+    y = radius * np.outer(np.sin(u), np.sin(v)) - offset[1]
+    z = radius * np.outer(np.ones(np.size(u)), np.cos(v)) - offset[2]
     
     return go.Surface(
         x=x, y=y, z=z,
@@ -96,12 +102,14 @@ def visualize_trajectory(
     t: np.ndarray = None,
     dt: float = 0.1,
     axis_scale: float = 1000.0,
+    offset = None,
     *, 
     title: str = "Lunar Descent Trajectories",
     other_vecs: dict = None,
     show_body_axes: bool = True,
     show_lander: bool = True,
-    downsample_rate: int = 5  # For downsampling the number of plotted frames
+    downsample_rate: int = 5,
+    moon_resolution: int = 35
 ):
     """
     Simple interactive 3D trajectory visualizer for one or multiple trajectories.
@@ -117,8 +125,16 @@ def visualize_trajectory(
         plotly Figure
     """
 
+    if offset is None:
+        offset = np.array([0,0,R_MOON])
+
     if isinstance(trajectories, np.ndarray):
         trajectories = [trajectories]  # Wrap in list if single trajectory provided
+
+    n = len(trajectories[0])
+    offset_full_state = np.tile(offset, (n, 1))
+    offset_full_state = np.pad(offset_full_state, ((0, 0), (0, 10)))
+    trajectories = [t - offset_full_state for t in trajectories]
     
     fig = go.Figure()
 
@@ -136,7 +152,7 @@ def visualize_trajectory(
         # Moon surface
         xx, yy = np.meshgrid(np.linspace(-10000, 10000, 5), np.linspace(-10000, 10000, 5))
         zz = np.full_like(xx, r[0, 2])  # Use the initial altitude
-        moon_surface_trace = moon_surface(radius=R_MOON, offset = [0,0,-R_MOON], resolution=100)
+        moon_surface_trace = moon_surface(radius=R_MOON, offset = offset, resolution=moon_resolution)
         fig.add_trace(moon_surface_trace)
 
         # Lander marker
@@ -246,3 +262,406 @@ def visualize_trajectory(
     )
 
     return fig
+
+def plot_accelerometer(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+    fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
+    axes_labels = ['X (Body)', 'Y (Body)', 'Z (Body)']
+    colors = ['#e74c3c', '#3498db', '#2ecc71']
+
+    for ax, dim, label, color in zip(axes, range(3), axes_labels, colors):
+        ax.plot(results.t, measurements_clean[sensor_name.ACCELEROMETER][:, dim], color=color, linewidth=2.5, label='True')
+        ax.scatter(results.t, measurements_noisy[sensor_name.ACCELEROMETER][:, dim], s=8, alpha=0.4, color=color, label='Noisy')
+        ax.set_ylabel(f'{label}\n(m/s²)', fontsize=11, fontweight='bold')
+        ax.grid(True, alpha=0.2, linestyle='--')
+        ax.legend(loc='upper right', fontsize=9)
+
+    axes[-1].set_xlabel('Time (s)', fontsize=11)
+    fig.suptitle('Accelerometer Measurements', fontsize=13, fontweight='bold', y=0.995)
+    plt.tight_layout()
+    return fig
+
+def plot_gyroscope(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+    fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
+    axes_labels = ['X (Body Roll)', 'Y (Body Pitch)', 'Z (Body Yaw)']
+    colors = ['#e74c3c', '#3498db', '#2ecc71']
+
+    for ax, dim, label, color in zip(axes, range(3), axes_labels, colors):
+        ax.plot(results.t, measurements_clean[sensor_name.GYROSCOPE][:, dim], color=color, linewidth=2.5, label='True')
+        ax.scatter(results.t, measurements_noisy[sensor_name.GYROSCOPE][:, dim], s=8, alpha=0.4, color=color, label='Noisy')
+        ax.set_ylabel(f'{label}\n(rad/s)', fontsize=11, fontweight='bold')
+        ax.grid(True, alpha=0.2, linestyle='--')
+        ax.legend(loc='upper right', fontsize=9)
+
+    axes[-1].set_xlabel('Time (s)', fontsize=11)
+    fig.suptitle('Gyroscope Measurements', fontsize=13, fontweight='bold', y=0.995)
+    plt.tight_layout()
+    return fig
+
+def plot_laser_altimeter(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+    fig, ax = plt.subplots(figsize=(14, 5))
+    colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12']
+
+    for beam in range(4):
+        ax.plot(results.t, measurements_clean[sensor_name.LASER_ALTIMETER][:, beam],
+                color=colors[beam], linewidth=2.5, label=f'Beam {beam} (clean)', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy[sensor_name.LASER_ALTIMETER][:, beam],
+                  s=5, alpha=0.15, color=colors[beam])
+
+    ax.set_xlabel('Time (s)', fontsize=11)
+    ax.set_ylabel('Distance to Surface (m)', fontsize=11, fontweight='bold')
+    ax.set_title('Laser Altimeter - Four Beam Measurements', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.2, linestyle='--')
+    ax.legend(loc='best', fontsize=10, ncol=4)
+    plt.tight_layout()
+    return fig
+
+def plot_laser_velocity(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+    fig, ax = plt.subplots(figsize=(14, 5))
+    colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12']
+
+    for beam in range(4):
+        ax.plot(results.t, measurements_clean[sensor_name.LASER_VELOCITY][:, beam],
+                color=colors[beam], linewidth=2.5, label=f'Beam {beam} (clean)', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy[sensor_name.LASER_VELOCITY][:, beam],
+                  s=5, alpha=0.15, color=colors[beam])
+
+    ax.set_xlabel('Time (s)', fontsize=11)
+    ax.set_ylabel('Range Rate (m/s)', fontsize=11, fontweight='bold')
+    ax.set_title('Laser Velocity (Doppler) - Four Beam Measurements', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.2, linestyle='--')
+    ax.axhline(0, color='k', linestyle='--', alpha=0.3)
+    ax.legend(loc='best', fontsize=10, ncol=4)
+    plt.tight_layout()
+    return fig
+
+def plot_star_tracker(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+    fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
+    labels = ['q0 (scalar)', 'q1 (x)', 'q2 (y)', 'q3 (z)']
+    colors = ['#9b59b6', '#e74c3c', '#3498db', '#2ecc71']
+
+    for ax, dim, label, color in zip(axes, range(4), labels, colors):
+        ax.plot(results.t, measurements_clean[sensor_name.STAR_TRACKER][:, dim],
+                color=color, linewidth=2.5, label='True')
+        ax.scatter(results.t, measurements_noisy[sensor_name.STAR_TRACKER][:, dim],
+                  s=8, alpha=0.3, color=color, label='Noisy')
+        ax.set_ylabel(label, fontsize=11, fontweight='bold')
+        ax.grid(True, alpha=0.2, linestyle='--')
+        ax.axhline(0, color='k', linestyle='--', alpha=0.2)
+        ax.legend(loc='upper right', fontsize=9)
+
+    axes[-1].set_xlabel('Time (s)', fontsize=11)
+    fig.suptitle('Star Tracker - Quaternion Attitude Measurements', fontsize=13, fontweight='bold', y=0.995)
+    plt.tight_layout()
+    return fig
+
+def plot_doppler(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+    fig, ax = plt.subplots(figsize=(14, 5))
+    n_sats = measurements_clean[sensor_name.DOPPLER].shape[1]
+    colors = plt.cm.tab10(np.linspace(0, 1, n_sats))
+
+    for sat in range(n_sats):
+        ax.plot(results.t, measurements_clean[sensor_name.DOPPLER][:, sat],
+                color=colors[sat], linewidth=2.5, label=f'Sat {sat} (clean)', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy[sensor_name.DOPPLER][:, sat],
+                  s=5, alpha=0.15, color=colors[sat])
+
+    ax.set_xlabel('Time (s)', fontsize=11)
+    ax.set_ylabel('Doppler Shift (m/s)', fontsize=11, fontweight='bold')
+    ax.set_title('Doppler Measurements from Satellites', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.2, linestyle='--')
+    ax.axhline(0, color='k', linestyle='--', alpha=0.3)
+    ax.legend(loc='best', fontsize=10)
+    plt.tight_layout()
+    return fig
+
+def plot_range_tracker(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+    fig, ax = plt.subplots(figsize=(14, 5))
+    n_sats = measurements_clean[sensor_name.RANGE_TRACKER].shape[1]
+    colors = plt.cm.tab10(np.linspace(0, 1, n_sats))
+
+    for sat in range(n_sats):
+        ax.plot(results.t, measurements_clean[sensor_name.RANGE_TRACKER][:, sat],
+                color=colors[sat], linewidth=2.5, label=f'Sat {sat} (clean)', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy[sensor_name.RANGE_TRACKER][:, sat],
+                  s=5, alpha=0.15, color=colors[sat])
+
+    ax.set_xlabel('Time (s)', fontsize=11)
+    ax.set_ylabel('Range to Satellite (m)', fontsize=11, fontweight='bold')
+    ax.set_title('Range Tracker Measurements to Satellites', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.2, linestyle='--')
+    ax.legend(loc='best', fontsize=10)
+    plt.tight_layout()
+    return fig
+
+def plot_measurements(measurements_clean, measurements_noisy, results, sensor_suite: SensorSuite):
+    """Plot only the sensors that are in the suite"""
+    plotters = {
+        SensorName.ACCELEROMETER: plot_accelerometer,
+        SensorName.GYROSCOPE: plot_gyroscope,
+        SensorName.LASER_ALTIMETER: plot_laser_altimeter,
+        SensorName.LASER_VELOCITY: plot_laser_velocity,
+        SensorName.STAR_TRACKER: plot_star_tracker,
+        SensorName.DOPPLER: plot_doppler,
+        SensorName.RANGE_TRACKER: plot_range_tracker,
+    }
+    
+    figs = []
+    for sensor_name, plotter in plotters.items():
+        if sensor_name in sensor_suite.sensors:
+            fig = plotter(measurements_clean, measurements_noisy, results, sensor_name)
+            figs.append(fig)
+            plt.show()
+    
+    return figs
+
+
+def plot_attitude_relative_vertical(states, t, figsize=(12, 6)):
+    """
+    Plot the angle between the body's Z-axis and the vertical (downward) direction.
+    This shows how tilted the lander is relative to vertical during landing.
+    
+    Args:
+        states: array of shape (n_steps, 13) with [r, v, q, w]
+        t: time array
+        figsize: figure size
+    
+    Returns:
+        matplotlib figure
+    """
+    
+    # Body Z-axis in body frame
+    body_z_axis = np.array([0, 0, 1])
+    
+    # Vertical direction in inertial frame (downward toward moon center)
+    vertical_inertial = np.array([0, 0, 1])
+    
+    tilt_angles = []
+    
+    for i in range(len(states)):
+        q_B2I = states[i, 6:10]  # quaternion from body to inertial
+        
+        # Transform body Z-axis to inertial frame
+        body_z_inertial = quat_apply(q_B2I, body_z_axis)
+        
+        # Calculate angle between body Z and vertical
+        # Using dot product: cos(theta) = a · b / (|a||b|)
+        cos_angle = np.dot(body_z_inertial, vertical_inertial) / (
+            np.linalg.norm(body_z_inertial) * np.linalg.norm(vertical_inertial)
+        )
+        # Clamp to [-1, 1] to avoid numerical issues
+        cos_angle = np.clip(cos_angle, -1, 1)
+        angle_rad = np.arccos(cos_angle)
+        angle_deg = np.degrees(angle_rad)
+        
+        tilt_angles.append(angle_deg)
+    
+    tilt_angles = np.array(tilt_angles)
+    
+    # Create plots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
+    
+    # Tilt angle over time
+    ax1.plot(t, tilt_angles, 'b-', linewidth=2)
+    ax1.fill_between(t, 0, tilt_angles, alpha=0.3)
+    ax1.set_ylabel('Tilt Angle (degrees)', fontsize=12)
+    ax1.set_title('Lander Attitude: Tilt Angle Relative to Vertical', fontsize=14)
+    ax1.grid(alpha=0.3)
+    ax1.axhline(0, color='k', linestyle='--', alpha=0.3, label='Vertical')
+    ax1.legend()
+    
+    # Altitude vs tilt angle (phase plot)
+    altitude = states[:, 2]
+    ax2.plot(altitude, tilt_angles, 'r-', linewidth=2)
+    ax2.set_xlabel('Altitude (m)', fontsize=12)
+    ax2.set_ylabel('Tilt Angle (degrees)', fontsize=12)
+    ax2.set_title('Tilt Angle vs Altitude', fontsize=14)
+    ax2.grid(alpha=0.3)
+    
+    plt.tight_layout()
+    
+    return fig, tilt_angles
+
+
+def plot_filter_confidence(Sigma_arr, t, figsize=(15, 10)):
+    """
+    Plot the filter's confidence over time by visualizing the covariance matrix.
+    Lower uncertainty = higher confidence.
+    
+    Args:
+        Sigma_arr: array of shape (n_steps, 13, 13) with covariance matrices
+        t: time array
+        figsize: figure size
+    
+    Returns:
+        matplotlib figure
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
+    n_steps = len(Sigma_arr)
+    
+    # Extract standard deviations for each state component
+    pos_std = np.array([np.sqrt(np.diag(Sigma_arr[i, 0:3, 0:3])) for i in range(n_steps)])
+    vel_std = np.array([np.sqrt(np.diag(Sigma_arr[i, 3:6, 3:6])) for i in range(n_steps)])
+    att_std = np.array([np.sqrt(np.diag(Sigma_arr[i, 6:10, 6:10])) for i in range(n_steps)])
+    ang_vel_std = np.array([np.sqrt(np.diag(Sigma_arr[i, 10:13, 10:13])) for i in range(n_steps)])
+    
+    # Overall metrics
+    trace = np.array([np.trace(Sigma_arr[i]) for i in range(n_steps)])
+    frobenius = np.array([np.linalg.norm(Sigma_arr[i], 'fro') for i in range(n_steps)])
+    
+    # Create figure with subplots
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(4, 2, hspace=0.35, wspace=0.3)
+    
+    # Position uncertainty
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.semilogy(t, pos_std[:, 0], 'r-', label='X', linewidth=1.5)
+    ax1.semilogy(t, pos_std[:, 1], 'g-', label='Y', linewidth=1.5)
+    ax1.semilogy(t, pos_std[:, 2], 'b-', label='Z', linewidth=1.5)
+    ax1.set_ylabel('Std Dev (m)', fontsize=10)
+    ax1.set_title('Position Uncertainty', fontsize=11, fontweight='bold')
+    ax1.grid(alpha=0.3, which='both')
+    ax1.legend(fontsize=9)
+    
+    # Velocity uncertainty
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.semilogy(t, vel_std[:, 0], 'r-', label='VX', linewidth=1.5)
+    ax2.semilogy(t, vel_std[:, 1], 'g-', label='VY', linewidth=1.5)
+    ax2.semilogy(t, vel_std[:, 2], 'b-', label='VZ', linewidth=1.5)
+    ax2.set_ylabel('Std Dev (m/s)', fontsize=10)
+    ax2.set_title('Velocity Uncertainty', fontsize=11, fontweight='bold')
+    ax2.grid(alpha=0.3, which='both')
+    ax2.legend(fontsize=9)
+    
+    # Attitude uncertainty
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.semilogy(t, att_std[:, 0], 'r-', label='q0', linewidth=1.5)
+    ax3.semilogy(t, att_std[:, 1], 'g-', label='q1', linewidth=1.5)
+    ax3.semilogy(t, att_std[:, 2], 'b-', label='q2', linewidth=1.5)
+    ax3.semilogy(t, att_std[:, 3], 'orange', label='q3', linewidth=1.5)
+    ax3.set_ylabel('Std Dev', fontsize=10)
+    ax3.set_title('Attitude (Quaternion) Uncertainty', fontsize=11, fontweight='bold')
+    ax3.grid(alpha=0.3, which='both')
+    ax3.legend(fontsize=9)
+    
+    # Angular velocity uncertainty
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.semilogy(t, ang_vel_std[:, 0], 'r-', label='WX', linewidth=1.5)
+    ax4.semilogy(t, ang_vel_std[:, 1], 'g-', label='WY', linewidth=1.5)
+    ax4.semilogy(t, ang_vel_std[:, 2], 'b-', label='WZ', linewidth=1.5)
+    ax4.set_ylabel('Std Dev (rad/s)', fontsize=10)
+    ax4.set_title('Angular Velocity Uncertainty', fontsize=11, fontweight='bold')
+    ax4.grid(alpha=0.3, which='both')
+    ax4.legend(fontsize=9)
+    
+    # Overall trace (sum of all variances)
+    ax5 = fig.add_subplot(gs[2, 0])
+    ax5.semilogy(t, trace, 'purple', linewidth=2.5, label='Trace(Σ)')
+    ax5.set_ylabel('Trace (overall variance)', fontsize=10)
+    ax5.set_title('Overall Filter Confidence (Lower = More Confident)', fontsize=11, fontweight='bold')
+    ax5.grid(alpha=0.3, which='both')
+    ax5.legend(fontsize=10)
+    
+    # Frobenius norm (total uncertainty)
+    ax6 = fig.add_subplot(gs[2, 1])
+    ax6.semilogy(t, frobenius, 'darkblue', linewidth=2.5, label='||Σ||_F')
+    ax6.set_ylabel('Frobenius Norm', fontsize=10)
+    ax6.set_title('Total Uncertainty (Frobenius Norm)', fontsize=11, fontweight='bold')
+    ax6.grid(alpha=0.3, which='both')
+    ax6.legend(fontsize=10)
+    
+    # Position uncertainty combined (norm of position variance)
+    ax7 = fig.add_subplot(gs[3, 0])
+    pos_uncertainty = np.array([np.linalg.norm(pos_std[i]) for i in range(n_steps)])
+    vel_uncertainty = np.array([np.linalg.norm(vel_std[i]) for i in range(n_steps)])
+    ax7.semilogy(t, pos_uncertainty, 'b-', linewidth=2, label='Position', marker='o', markersize=2, markevery=50)
+    ax7.semilogy(t, vel_uncertainty, 'r-', linewidth=2, label='Velocity', marker='s', markersize=2, markevery=50)
+    ax7.set_ylabel('Std Dev Magnitude', fontsize=10)
+    ax7.set_xlabel('Time (s)', fontsize=10)
+    ax7.set_title('Combined Position & Velocity Uncertainty', fontsize=11, fontweight='bold')
+    ax7.grid(alpha=0.3, which='both')
+    ax7.legend(fontsize=10)
+    
+    # Confidence indicator: inverse of uncertainty (higher = more confident)
+    ax8 = fig.add_subplot(gs[3, 1])
+    # Use log scale inverted to show confidence visually
+    confidence = 1.0 / (1.0 + trace)  # Normalize to [0, 1]
+    ax8.fill_between(t, 0, confidence, alpha=0.5, color='green', label='Confidence')
+    ax8.plot(t, confidence, 'g-', linewidth=2)
+    ax8.set_ylabel('Confidence Score', fontsize=10)
+    ax8.set_xlabel('Time (s)', fontsize=10)
+    ax8.set_title('Filter Confidence Level (Higher = More Confident)', fontsize=11, fontweight='bold')
+    ax8.set_ylim([0, 1])
+    ax8.grid(alpha=0.3)
+    ax8.legend(fontsize=10)
+    
+    fig.suptitle('EKF Covariance Matrix Evolution - Filter Confidence Over Time',
+                 fontsize=14, fontweight='bold', y=0.995)
+
+    return fig
+
+
+def obsv_verbose(x, sensor_suite: SensorSuite, a_m, w_m, Q, sim, env, h=3, show_plot=False):
+    """
+    Analyze system observability using the observability matrix rank with JAX automatic differentiation.
+
+    Args:
+        x: current state estimate [13]
+        sensor_suite: SensorSuite with all sensors
+        a_m: accelerometer measurement (specific force) [3]
+        w_m: gyroscope measurement (angular velocity) [3]
+        Q: process noise covariance [13, 13]
+        sim: SimParams with simulator configuration
+        env: SensorEnvironment with contextual information
+        h: number of time steps for observability matrix
+        show_plot: whether to plot singular values
+    """
+    x = jnp.array(x, dtype=float)
+    a_m = jnp.array(a_m, dtype=float)
+    w_m = jnp.array(w_m, dtype=float)
+
+    O, F_n = [], np.eye(13)
+
+    for _ in range(h):
+        H_list = []
+        for sensor in sensor_suite.sensors.values():
+            jac_fn = jax.jacfwd(lambda s: sensor.measure(s, env))
+            H_sensor = np.array(jac_fn(x))
+            H_list.append(H_sensor)
+        H = np.vstack(H_list)
+
+        O.append(H @ F_n)
+
+        jac_predict = jax.jacfwd(lambda s: ekf_predict_state_only(s, a_m, w_m, sim))
+        F = np.array(jac_predict(x))
+        x = unitize_state(ekf_predict_state_only(x, a_m, w_m, sim))
+        F_n = F_n @ F
+
+    U, S, V = svd(np.vstack(O))
+    r = np.sum(S > S[0]*1e-6)
+
+    print(f"Rank {r}/13\n")
+    print("OBSERVABLE states:")
+    state_names = ["x", "y", "z", "vx", "vy", "vz", "q0", "q1", "q2", "q3", "ωx", "ωy", "ωz"]
+    for i in range(r):
+        print(f"  Mode {i}: S={S[i]:.2e}")
+
+    print(f"\nUNOBSERVABLE states ({13-r}):")
+    for i in range(r, len(S)):
+        null_vec = V[i, :]
+        contribs = np.abs(null_vec)
+        top_idx = np.argsort(contribs)[-1]
+        print(f"  Mode {i}: Primary = {state_names[top_idx]} ({null_vec[top_idx]:.3f})")
+
+    if show_plot:
+        plt.figure(figsize=(10, 4))
+        plt.semilogy(S, 'ko-', linewidth=2, markersize=6)
+        plt.axhline(S[0]*1e-6, linewidth=2, label='Rank threshold')
+        plt.xlabel('Singular Value Index')
+        plt.ylabel('Singular Value')
+        plt.title(f'Observability (Rank {r}/13)')
+        plt.grid()
+        plt.legend()
+        plt.show()
+

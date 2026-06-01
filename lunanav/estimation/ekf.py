@@ -2,6 +2,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Callable
 from scipy.linalg import block_diag
+import jax.numpy as jnp
 
 from ..sim.simulator import rigid_body_derivative, lander_motion, linearized_lander_motion
 from ..sim.simulator import SimParams
@@ -11,42 +12,31 @@ from ..sim.simulator import SimParams
 # https://algorithmsbook.com/files/dm.pdf
 
 
-def meas_gyro(state):
-    return state[10:13]
-
-def gyro_jacobian(state):
-    del state
-    J = np.zeros((3,13))
-    J[:,10:13] = np.eye(3)
-    return J
-
-
-
 
 
 @dataclass
 class EkfParams:
-    Q: np.ndarray # process noise covariance
-    R: np.ndarray # measurement noise covariance
-    H: Callable[[np.ndarray], np.ndarray] # measurement Jacobian function
-    h: Callable[[np.ndarray], np.ndarray] # measurement function
+    Q: jnp.ndarray # process noise covariance
+    R: jnp.ndarray # measurement noise covariance
+    H: Callable[[jnp.ndarray], jnp.ndarray] # measurement Jacobian function
+    h: Callable[[jnp.ndarray], jnp.ndarray] # measurement function
 
-def ekf_predict(x: np.ndarray, P: np.ndarray, a_meas: np.ndarray, w_meas: np.ndarray,
-                Q: np.ndarray, sim: SimParams) -> np.ndarray:
-    x_copy = x.copy()
-    x_copy[10:13] = w_meas
+def ekf_predict(x: jnp.ndarray, P: jnp.ndarray, a_meas: jnp.ndarray, w_meas: jnp.ndarray,
+                Q: jnp.ndarray, sim: SimParams) -> jnp.ndarray:
+    
+    x_copy = jnp.concatenate([x[0:10], w_meas])
     force_B = a_meas * sim.body.mass_kg
-    torque_B = np.zeros(3) # TODO: not doing torque_B input right now
+    torque_B = jnp.zeros(3) # TODO: not doing torque_B input right now
     x_next = lander_motion(x_copy, force_B, torque_B, sim.dt, sim.body.mass_kg, sim.body.I)
-
-    if any(np.isnan(x_next)):
-        print(x_copy)
-        print(force_B)
-        print(torque_B)
-        print()
-        raise ValueError("EKF prediction step resulted in invalid state")
-        
     Fd = linearized_lander_motion(x_copy, force_B, torque_B, sim.dt, sim.body.mass_kg, sim.body.I)
+
+    # if any(np.isnan(x_next)):
+    #     print(x_copy)
+    #     print(force_B)
+    #     print(torque_B)
+    #     print()
+    #     raise ValueError("EKF prediction step resulted in invalid state")
+        
 
     P_next = Fd @ P @ Fd.T + Q
 
@@ -55,25 +45,31 @@ def ekf_predict(x: np.ndarray, P: np.ndarray, a_meas: np.ndarray, w_meas: np.nda
 
     return x_next, P_next
 
-def ekf_update(x: np.ndarray, P: np.ndarray, meas: np.ndarray, H: np.ndarray, x_expected: np.ndarray, R: np.ndarray) -> np.ndarray:
+def ekf_update(x: jnp.ndarray, P: jnp.ndarray, meas: jnp.ndarray, H: jnp.ndarray, x_expected: jnp.ndarray, R: jnp.ndarray) -> jnp.ndarray:
 
     y = meas - x_expected
     S = H @ P @ H.T + R
 
-    K = P @ H.T @ np.linalg.pinv(S)
+    K = P @ H.T @ jnp.linalg.pinv(S)
 
     x_next = x + K @ y
 
     q = x_next[6:10]
-    q = q / np.linalg.norm(q)
+    q = q / jnp.linalg.norm(q)
     x_next = x_next.at[6:10].set(q)
 
-    
-
-    I = np.eye(len(x))
+    I = jnp.eye(len(x))
     P_next = (I - K @ H) @ P @ (I - K @ H).T + K @ R @ K.T
 
     return x_next, P_next
+
+def ekf_predict_state_only(x: jnp.ndarray, a_meas: jnp.ndarray, w_meas: jnp.ndarray, sim: SimParams) -> jnp.ndarray:
+    """Predict step that returns only the state (not covariance). Useful for observability Jacobians."""
+    x_copy = jnp.concatenate([x[0:10], w_meas])
+    force_B = a_meas * sim.body.mass_kg
+    torque_B = jnp.zeros(3)
+    x_next = lander_motion(x_copy, force_B, torque_B, sim.dt, sim.body.mass_kg, sim.body.I)
+    return x_next
 
 def Qd_from_accel_white(dt, sigma_a):
 
