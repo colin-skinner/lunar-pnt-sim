@@ -254,8 +254,8 @@ def plot_measurements(measurements_clean: dict, measurements_noisy: dict, result
     Plot all sensor measurements comparing clean vs noisy data.
 
     Args:
-        measurements_clean: Dict[timestep][SensorName] -> measurement array
-        measurements_noisy: Dict[timestep][SensorName] -> measurement array (with noise)
+        measurements_clean: Dict[SensorName] -> array of shape (n_steps, meas_dim)
+        measurements_noisy: Dict[SensorName] -> array of shape (n_steps, meas_dim)
         results: SimResults object with states, forces, torques, and time
         sensor_suite: SensorSuite object with all sensors
         lander: RigidBody object (for mass)
@@ -267,11 +267,10 @@ def plot_measurements(measurements_clean: dict, measurements_noisy: dict, result
     from .sim.sensors import SensorName
 
     fig, axes = plt.subplots(5, 1, figsize=figsize)
-    n_steps = len(measurements_clean)
 
     # Accelerometer (3 channels)
-    accel_clean = np.array([measurements_clean[i][SensorName.ACCELEROMETER] for i in range(n_steps)])
-    accel_noisy = np.array([measurements_noisy[i][SensorName.ACCELEROMETER] for i in range(n_steps)])
+    accel_clean = measurements_clean[SensorName.ACCELEROMETER]
+    accel_noisy = measurements_noisy[SensorName.ACCELEROMETER]
     accel_true = results.force_N / lander.mass_kg
     for j in range(3):
         axes[0].plot(results.t, accel_true[:, j], 'k-', alpha=0.5, linewidth=1.5)
@@ -282,8 +281,8 @@ def plot_measurements(measurements_clean: dict, measurements_noisy: dict, result
     axes[0].legend(["X (truth)", "Y (truth)", "Z (truth)"], loc="upper right")
 
     # Gyroscope (3 channels)
-    gyro_clean = np.array([measurements_clean[i][SensorName.GYROSCOPE] for i in range(n_steps)])
-    gyro_noisy = np.array([measurements_noisy[i][SensorName.GYROSCOPE] for i in range(n_steps)])
+    gyro_clean = measurements_clean[SensorName.GYROSCOPE]
+    gyro_noisy = measurements_noisy[SensorName.GYROSCOPE]
     gyro_true = results.states[:, 10:13]
     for j in range(3):
         axes[1].plot(results.t, gyro_true[:, j], 'k-', alpha=0.5, linewidth=1.5)
@@ -294,8 +293,8 @@ def plot_measurements(measurements_clean: dict, measurements_noisy: dict, result
     axes[1].legend(["X (truth)", "Y (truth)", "Z (truth)"], loc="upper right")
 
     # Laser altimeter (4 channels)
-    laser_alt_clean = np.array([measurements_clean[i][SensorName.LASER_ALTIMETER] for i in range(n_steps)])
-    laser_alt_noisy = np.array([measurements_noisy[i][SensorName.LASER_ALTIMETER] for i in range(n_steps)])
+    laser_alt_clean = measurements_clean[SensorName.LASER_ALTIMETER]
+    laser_alt_noisy = measurements_noisy[SensorName.LASER_ALTIMETER]
     for j in range(4):
         axes[2].plot(results.t, laser_alt_clean[:, j], '-', alpha=0.7, linewidth=1.5, label=f"LOS {j+1} (truth)")
         axes[2].plot(results.t, laser_alt_noisy[:, j], '.', markersize=1, alpha=0.3)
@@ -305,8 +304,8 @@ def plot_measurements(measurements_clean: dict, measurements_noisy: dict, result
     axes[2].legend(loc="upper right", ncol=4, fontsize=8)
 
     # Laser velocity (4 channels)
-    laser_vel_clean = np.array([measurements_clean[i][SensorName.LASER_VELOCITY] for i in range(n_steps)])
-    laser_vel_noisy = np.array([measurements_noisy[i][SensorName.LASER_VELOCITY] for i in range(n_steps)])
+    laser_vel_clean = measurements_clean[SensorName.LASER_VELOCITY]
+    laser_vel_noisy = measurements_noisy[SensorName.LASER_VELOCITY]
     for j in range(4):
         axes[3].plot(results.t, laser_vel_clean[:, j], '-', alpha=0.7, linewidth=1.5, label=f"LOS {j+1} (truth)")
         axes[3].plot(results.t, laser_vel_noisy[:, j], '.', markersize=1, alpha=0.3)
@@ -316,8 +315,8 @@ def plot_measurements(measurements_clean: dict, measurements_noisy: dict, result
     axes[3].legend(loc="upper right", ncol=4, fontsize=8)
 
     # Star tracker (quaternion components)
-    star_clean = np.array([measurements_clean[i][SensorName.STAR_TRACKER] for i in range(n_steps)])
-    star_noisy = np.array([measurements_noisy[i][SensorName.STAR_TRACKER] for i in range(n_steps)])
+    star_clean = measurements_clean[SensorName.STAR_TRACKER]
+    star_noisy = measurements_noisy[SensorName.STAR_TRACKER]
     star_true = results.states[:, 6:10]
     for j in range(4):
         axes[4].plot(results.t, star_true[:, j], 'k-', alpha=0.5, linewidth=1.5)
