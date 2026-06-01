@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 from .sim.quaternion import quat_apply
 from .constants import R_MOON
+from .sim.sensors import SensorName, SensorSuite
 
 # Define specific colors
 x_axis_color = 'red'
@@ -248,88 +249,86 @@ def visualize_trajectory(
 
     return fig
 
-
-def plot_measurements(measurements_clean: dict, measurements_noisy: dict, results, sensor_suite, lander, figsize: tuple = (15, 14)):
-    """
-    Plot all sensor measurements comparing clean vs noisy data.
-
-    Args:
-        measurements_clean: Dict[SensorName] -> array of shape (n_steps, meas_dim)
-        measurements_noisy: Dict[SensorName] -> array of shape (n_steps, meas_dim)
-        results: SimResults object with states, forces, torques, and time
-        sensor_suite: SensorSuite object with all sensors
-        lander: RigidBody object (for mass)
-        figsize: Figure size (width, height)
-
-    Returns:
-        matplotlib Figure with 5 subplots (one per sensor type)
-    """
-    from .sim.sensors import SensorName
-
-    fig, axes = plt.subplots(5, 1, figsize=figsize)
-
-    # Accelerometer (3 channels)
-    accel_clean = measurements_clean[SensorName.ACCELEROMETER]
-    accel_noisy = measurements_noisy[SensorName.ACCELEROMETER]
-    accel_true = results.force_N / lander.mass_kg
-    for j in range(3):
-        axes[0].plot(results.t, accel_true[:, j], 'k-', alpha=0.5, linewidth=1.5)
-        axes[0].plot(results.t, accel_noisy[:, j], '.', markersize=1, alpha=0.4)
-    axes[0].set_ylabel("Acceleration (m/s²)")
-    axes[0].set_title("Accelerometer: True (black) vs Noisy (colored dots)")
-    axes[0].grid(alpha=0.3)
-    axes[0].legend(["X (truth)", "Y (truth)", "Z (truth)"], loc="upper right")
-
-    # Gyroscope (3 channels)
-    gyro_clean = measurements_clean[SensorName.GYROSCOPE]
-    gyro_noisy = measurements_noisy[SensorName.GYROSCOPE]
-    gyro_true = results.states[:, 10:13]
-    for j in range(3):
-        axes[1].plot(results.t, gyro_true[:, j], 'k-', alpha=0.5, linewidth=1.5)
-        axes[1].plot(results.t, gyro_noisy[:, j], '.', markersize=1, alpha=0.4)
-    axes[1].set_ylabel("Angular Velocity (rad/s)")
-    axes[1].set_title("Gyroscope: True (black) vs Noisy (colored dots)")
-    axes[1].grid(alpha=0.3)
-    axes[1].legend(["X (truth)", "Y (truth)", "Z (truth)"], loc="upper right")
-
-    # Laser altimeter (4 channels)
-    laser_alt_clean = measurements_clean[SensorName.LASER_ALTIMETER]
-    laser_alt_noisy = measurements_noisy[SensorName.LASER_ALTIMETER]
-    for j in range(4):
-        axes[2].plot(results.t, laser_alt_clean[:, j], '-', alpha=0.7, linewidth=1.5, label=f"LOS {j+1} (truth)")
-        axes[2].plot(results.t, laser_alt_noisy[:, j], '.', markersize=1, alpha=0.3)
-    axes[2].set_ylabel("Distance (m)")
-    axes[2].set_title("Laser Altimeter: Clean (lines) vs Noisy (dots)")
-    axes[2].grid(alpha=0.3)
-    axes[2].legend(loc="upper right", ncol=4, fontsize=8)
-
-    # Laser velocity (4 channels)
-    laser_vel_clean = measurements_clean[SensorName.LASER_VELOCITY]
-    laser_vel_noisy = measurements_noisy[SensorName.LASER_VELOCITY]
-    for j in range(4):
-        axes[3].plot(results.t, laser_vel_clean[:, j], '-', alpha=0.7, linewidth=1.5, label=f"LOS {j+1} (truth)")
-        axes[3].plot(results.t, laser_vel_noisy[:, j], '.', markersize=1, alpha=0.3)
-    axes[3].set_ylabel("Range Rate (m/s)")
-    axes[3].set_title("Laser Velocity: Clean (lines) vs Noisy (dots)")
-    axes[3].grid(alpha=0.3)
-    axes[3].legend(loc="upper right", ncol=4, fontsize=8)
-
-    # Star tracker (quaternion components)
-    star_clean = measurements_clean[SensorName.STAR_TRACKER]
-    star_noisy = measurements_noisy[SensorName.STAR_TRACKER]
-    star_true = results.states[:, 6:10]
-    for j in range(4):
-        axes[4].plot(results.t, star_true[:, j], 'k-', alpha=0.5, linewidth=1.5)
-        axes[4].plot(results.t, star_noisy[:, j], '.', markersize=1, alpha=0.4)
-    axes[4].set_xlabel("Time (s)")
-    axes[4].set_ylabel("Quaternion Component")
-    axes[4].set_title("Star Tracker (Attitude): True (black) vs Noisy (colored dots)")
-    axes[4].grid(alpha=0.3)
-    axes[4].legend(["q0 (truth)", "q1 (truth)", "q2 (truth)", "q3 (truth)"], loc="upper right")
-
-    plt.tight_layout()
-
+def plot_accelerometer(measurements_clean, measurements_noisy, results, SensorName: SensorName):
+    fig, ax = plt.subplots(figsize=(15, 3))
+    for dim in range(3):
+        ax.plot(results.t, measurements_clean[SensorName.ACCELEROMETER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (dim {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_noisy[SensorName.ACCELEROMETER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (dim {dim})' if dim == 0 else '')
+    ax.set_ylabel('Accelerometer (m/s²)')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
     return fig
+
+def plot_gyroscope(measurements_clean, measurements_noisy, results, SensorName):
+    fig, ax = plt.subplots(figsize=(15, 3))
+    for dim in range(3):
+        ax.plot(results.t, measurements_clean[SensorName.GYROSCOPE][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (dim {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_noisy[SensorName.GYROSCOPE][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (dim {dim})' if dim == 0 else '')
+    ax.set_ylabel('Gyroscope (rad/s)')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    return fig
+
+def plot_laser_altimeter(measurements_clean, measurements_noisy, results, SensorName):
+    fig, ax = plt.subplots(figsize=(15, 3))
+    for dim in range(4):
+        ax.plot(results.t, measurements_clean[SensorName.LASER_ALTIMETER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (beam {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_noisy[SensorName.LASER_ALTIMETER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (beam {dim})' if dim == 0 else '')
+    ax.set_ylabel('Laser Altimeter (m)')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    return fig
+
+def plot_laser_velocity(measurements_clean, measurements_noisy, results, SensorName):
+    fig, ax = plt.subplots(figsize=(15, 3))
+    for dim in range(4):
+        ax.plot(results.t, measurements_clean[SensorName.LASER_VELOCITY][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (beam {dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_noisy[SensorName.LASER_VELOCITY][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (beam {dim})' if dim == 0 else '')
+    ax.set_ylabel('Laser Velocity (m/s)')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    return fig
+
+def plot_star_tracker(measurements_clean, measurements_noisy, results, SensorName):
+    fig, ax = plt.subplots(figsize=(15, 3))
+    for dim in range(4):
+        ax.plot(results.t, measurements_clean[SensorName.STAR_TRACKER][:, dim], 'k-', linewidth=2, alpha=0.7, label=f'Clean (q{dim})' if dim == 0 else '')
+        ax.plot(results.t, measurements_noisy[SensorName.STAR_TRACKER][:, dim], 'r.', markersize=2, alpha=0.5, label=f'Noisy (q{dim})' if dim == 0 else '')
+    ax.set_ylabel('Star Tracker (quaternion)')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    return fig
+
+def plot_doppler(measurements_clean, measurements_noisy, results, SensorName):
+    fig, ax = plt.subplots(figsize=(15, 3))
+    n_sats = measurements_clean[SensorName.DOPPLER].shape[1]
+    for sat in range(n_sats):
+        ax.plot(results.t, measurements_clean[SensorName.DOPPLER][:, sat], 'k-', linewidth=2, alpha=0.7, label=f'Clean (sat {sat})' if sat == 0 else '')
+        ax.plot(results.t, measurements_noisy[SensorName.DOPPLER][:, sat], 'r.', markersize=2, alpha=0.5, label=f'Noisy (sat {sat})' if sat == 0 else '')
+    ax.set_ylabel('Doppler (m/s)')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    return fig
+
+def plot_measurements(measurements_clean, measurements_noisy, results, sensor_suite: SensorSuite):
+    """Plot only the sensors that are in the suite"""
+    plotters = {
+        SensorName.ACCELEROMETER: plot_accelerometer,
+        SensorName.GYROSCOPE: plot_gyroscope,
+        SensorName.LASER_ALTIMETER: plot_laser_altimeter,
+        SensorName.LASER_VELOCITY: plot_laser_velocity,
+        SensorName.STAR_TRACKER: plot_star_tracker,
+        SensorName.DOPPLER: plot_doppler,
+    }
+    
+    figs = []
+    for sensor_name, plotter in plotters.items():
+        if sensor_name in sensor_suite.sensors:
+            fig = plotter(measurements_clean, measurements_noisy, results, sensor_name)
+            figs.append(fig)
+            plt.show()
+    
+    return figs
 
 
 def plot_attitude_relative_vertical(states, t, figsize=(12, 6)):

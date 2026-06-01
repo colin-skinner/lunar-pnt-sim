@@ -221,7 +221,7 @@ class SensorEnvironment:
     """
     t: float  # Current time (seconds)
     mass: float
-    satellite_specific_force: jnp.ndarray = field(default_factory=lambda: jnp.array([]))  # [3]
+    specific_force_body: jnp.ndarray = field(default_factory=lambda: jnp.array([]))  # [3]
     satellite_positions: jnp.ndarray = field(default_factory=lambda: jnp.array([]))  # [n_sats, 3]
     satellite_velocities: jnp.ndarray = field(default_factory=lambda: jnp.array([]))  # [n_sats, 3]
     terrain_map: jnp.ndarray = field(default_factory=lambda: jnp.array([]))  # elevation grid or feature data
@@ -265,8 +265,8 @@ def accelerometer_sensor(noise_std: float) -> Sensor:
     """Accelerometer: measures body-frame specific force (inertial acceleration converted to body frame)."""
     def meas_fn(state: jnp.ndarray, env: SensorEnvironment) -> jnp.ndarray:
         # q_B2L = state[6:10]
-        # specific_force_body = quat_apply(conj(q_B2L), env.satellite_specific_force)
-        return env.satellite_specific_force / env.mass
+        # specific_force_body = quat_apply(conj(q_B2L), env.specific_force_body)
+        return env.specific_force_body / env.mass
 
     return Sensor(
         name=SensorName.ACCELEROMETER,
@@ -333,7 +333,7 @@ def star_tracker_sensor(noise_std: float) -> Sensor:
     )
 
 
-def doppler_sensor(satellite_traj_fn: Callable[[float], tuple[jnp.ndarray, jnp.ndarray]], noise_std: float) -> Sensor:
+def doppler_sensor(n_sats: int, noise_std: float) -> Sensor:
     """
     Doppler sensor: measures relative velocity along line-of-sight.
 
@@ -347,49 +347,56 @@ def doppler_sensor(satellite_traj_fn: Callable[[float], tuple[jnp.ndarray, jnp.n
             return sat_positions[idx], sat_velocities[idx]
         doppler = doppler_sensor(sat_trajectory, noise_std=0.1)
     """
+    
+    
     def meas_fn(state: jnp.ndarray, env: SensorEnvironment) -> jnp.ndarray:
-        r_lander = state[0:3]
-        v_lander = state[3:6]
-        r_sat, v_sat = satellite_traj_fn(env.t)
+        r = state[0:3]
+        v = state[3:6]
 
-        rel_pos = r_lander - r_sat
-        rel_vel = v_lander - v_sat
-
-        doppler = jnp.dot(rel_vel, rel_pos) / norm(rel_pos)
-        return jnp.array([doppler])
+        measurements = []
+        for i in range(n_sats):
+            r_sat = env.satellite_positions[i]
+            v_sat = env.satellite_velocities[i]
+            
+            rel_pos = r - r_sat
+            rel_vel = v - v_sat
+            doppler = jnp.dot(rel_vel, rel_pos) / norm(rel_pos) # pg. 9 of that one paper (Navigation by satellite using two-way range and doppler data)
+            measurements.append(doppler)
+        
+        return jnp.array(measurements)
 
     return Sensor(
         name=SensorName.DOPPLER,
         measurement_fn=meas_fn,
-        noise_cov=jnp.array([[noise_std ** 2]]),
-        meas_dim=1
+        noise_cov=jnp.eye(n_sats) * (noise_std ** 2),
+        meas_dim=n_sats
     )
 
 
-def terrain_relative_nav_sensor(terrain_map: jnp.ndarray, noise_std: float) -> Sensor:
-    """
-    Terrain-relative nav: measures altitude above terrain.
+# def terrain_relative_nav_sensor(terrain_map: jnp.ndarray, noise_std: float) -> Sensor:
+#     """
+#     Terrain-relative nav: measures altitude above terrain.
 
-    Args:
-        terrain_map: 2D elevation grid [height, width]
-        noise_std: measurement noise standard deviation
-    """
-    def meas_fn(state: jnp.ndarray, env: SensorEnvironment) -> jnp.ndarray:
-        r_lander = state[0:3]
+#     Args:
+#         terrain_map: 2D elevation grid [height, width]
+#         noise_std: measurement noise standard deviation
+#     """
+#     def meas_fn(state: jnp.ndarray, env: SensorEnvironment) -> jnp.ndarray:
+#         r_lander = state[0:3]
 
-        ix = jnp.clip(int(r_lander[0] / 10), 0, terrain_map.shape[0] - 1)
-        iy = jnp.clip(int(r_lander[1] / 10), 0, terrain_map.shape[1] - 1)
-        z_terrain = terrain_map[ix, iy]
+#         ix = jnp.clip(int(r_lander[0] / 10), 0, terrain_map.shape[0] - 1)
+#         iy = jnp.clip(int(r_lander[1] / 10), 0, terrain_map.shape[1] - 1)
+#         z_terrain = terrain_map[ix, iy]
 
-        alt_above_terrain = r_lander[2] - z_terrain
-        return jnp.array([alt_above_terrain])
+#         alt_above_terrain = r_lander[2] - z_terrain
+#         return jnp.array([alt_above_terrain])
 
-    return Sensor(
-        name=SensorName.TERRAIN_RELATIVE_NAV,
-        measurement_fn=meas_fn,
-        noise_cov=jnp.array([[noise_std ** 2]]),
-        meas_dim=1
-    )
+#     return Sensor(
+#         name=SensorName.TERRAIN_RELATIVE_NAV,
+#         measurement_fn=meas_fn,
+#         noise_cov=jnp.array([[noise_std ** 2]]),
+#         meas_dim=1
+#     )
 
 
 @dataclass
