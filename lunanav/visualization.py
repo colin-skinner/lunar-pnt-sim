@@ -1,9 +1,13 @@
 import numpy as np
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
-from .sim.quaternion import quat_apply
+from numpy.linalg import svd
+import jax
+import jax.numpy as jnp
+from .sim.quaternion import quat_apply, unitize_state
 from .constants import R_MOON
 from .sim.sensors import SensorName, SensorSuite
+from .estimation.ekf import ekf_predict_state_only
 
 # Define specific colors
 x_axis_color = 'red'
@@ -16,14 +20,14 @@ z_axis_color = 'blue'
 #                              showscale=False, name='Moon', hoverinfo='skip')
 
 def moon_surface(radius=R_MOON, offset: np.ndarray = np.zeros(3), resolution=25, color='#444444'):
-    """Returns go.Surface of Moon as a sphere"""
+    """Returns go.Surface of Moon as a sphere. Offset is how far UP the coordinate system is shifted"""
     # Create sphere using spherical coordinates
     u = np.linspace(0, 2 * np.pi, resolution)
     v = np.linspace(0, np.pi, resolution)
     
-    x = radius * np.outer(np.cos(u), np.sin(v)) + offset[0]
-    y = radius * np.outer(np.sin(u), np.sin(v)) + offset[1]
-    z = radius * np.outer(np.ones(np.size(u)), np.cos(v)) + offset[2]
+    x = radius * np.outer(np.cos(u), np.sin(v)) - offset[0]
+    y = radius * np.outer(np.sin(u), np.sin(v)) - offset[1]
+    z = radius * np.outer(np.ones(np.size(u)), np.cos(v)) - offset[2]
     
     return go.Surface(
         x=x, y=y, z=z,
@@ -98,12 +102,14 @@ def visualize_trajectory(
     t: np.ndarray = None,
     dt: float = 0.1,
     axis_scale: float = 1000.0,
+    offset = None,
     *, 
     title: str = "Lunar Descent Trajectories",
     other_vecs: dict = None,
     show_body_axes: bool = True,
     show_lander: bool = True,
-    downsample_rate: int = 5  # For downsampling the number of plotted frames
+    downsample_rate: int = 5,
+    moon_resolution: int = 35
 ):
     """
     Simple interactive 3D trajectory visualizer for one or multiple trajectories.
@@ -119,8 +125,16 @@ def visualize_trajectory(
         plotly Figure
     """
 
+    if offset is None:
+        offset = np.array([0,0,R_MOON])
+
     if isinstance(trajectories, np.ndarray):
         trajectories = [trajectories]  # Wrap in list if single trajectory provided
+
+    n = len(trajectories[0])
+    offset_full_state = np.tile(offset, (n, 1))
+    offset_full_state = np.pad(offset_full_state, ((0, 0), (0, 10)))
+    trajectories = [t - offset_full_state for t in trajectories]
     
     fig = go.Figure()
 
@@ -138,7 +152,7 @@ def visualize_trajectory(
         # Moon surface
         xx, yy = np.meshgrid(np.linspace(-10000, 10000, 5), np.linspace(-10000, 10000, 5))
         zz = np.full_like(xx, r[0, 2])  # Use the initial altitude
-        moon_surface_trace = moon_surface(radius=R_MOON, offset = [0,0,-R_MOON], resolution=100)
+        moon_surface_trace = moon_surface(radius=R_MOON, offset = offset, resolution=moon_resolution)
         fig.add_trace(moon_surface_trace)
 
         # Lander marker
@@ -524,8 +538,72 @@ def plot_filter_confidence(Sigma_arr, t, figsize=(15, 10)):
     ax8.grid(alpha=0.3)
     ax8.legend(fontsize=10)
     
-    fig.suptitle('EKF Covariance Matrix Evolution - Filter Confidence Over Time', 
+    fig.suptitle('EKF Covariance Matrix Evolution - Filter Confidence Over Time',
                  fontsize=14, fontweight='bold', y=0.995)
-    
+
     return fig
+
+
+def obsv_verbose(x, sensor_suite: SensorSuite, a_m, w_m, Q, sim, env, h=3, show_plot=False):
+    """
+    Analyze system observability using the observability matrix rank with JAX automatic differentiation.
+
+    Args:
+        x: current state estimate [13]
+        sensor_suite: SensorSuite with all sensors
+        a_m: accelerometer measurement (specific force) [3]
+        w_m: gyroscope measurement (angular velocity) [3]
+        Q: process noise covariance [13, 13]
+        sim: SimParams with simulator configuration
+        env: SensorEnvironment with contextual information
+        h: number of time steps for observability matrix
+        show_plot: whether to plot singular values
+    """
+    x = jnp.array(x, dtype=float)
+    a_m = jnp.array(a_m, dtype=float)
+    w_m = jnp.array(w_m, dtype=float)
+
+    O, F_n = [], np.eye(13)
+
+    for _ in range(h):
+        H_list = []
+        for sensor in sensor_suite.sensors.values():
+            jac_fn = jax.jacfwd(lambda s: sensor.measure(s, env))
+            H_sensor = np.array(jac_fn(x))
+            H_list.append(H_sensor)
+        H = np.vstack(H_list)
+
+        O.append(H @ F_n)
+
+        jac_predict = jax.jacfwd(lambda s: ekf_predict_state_only(s, a_m, w_m, sim))
+        F = np.array(jac_predict(x))
+        x = unitize_state(ekf_predict_state_only(x, a_m, w_m, sim))
+        F_n = F_n @ F
+
+    U, S, V = svd(np.vstack(O))
+    r = np.sum(S > S[0]*1e-6)
+
+    print(f"Rank {r}/13\n")
+    print("OBSERVABLE states:")
+    state_names = ["x", "y", "z", "vx", "vy", "vz", "q0", "q1", "q2", "q3", "ωx", "ωy", "ωz"]
+    for i in range(r):
+        print(f"  Mode {i}: S={S[i]:.2e}")
+
+    print(f"\nUNOBSERVABLE states ({13-r}):")
+    for i in range(r, len(S)):
+        null_vec = V[i, :]
+        contribs = np.abs(null_vec)
+        top_idx = np.argsort(contribs)[-1]
+        print(f"  Mode {i}: Primary = {state_names[top_idx]} ({null_vec[top_idx]:.3f})")
+
+    if show_plot:
+        plt.figure(figsize=(10, 4))
+        plt.semilogy(S, 'ko-', linewidth=2, markersize=6)
+        plt.axhline(S[0]*1e-6, linewidth=2, label='Rank threshold')
+        plt.xlabel('Singular Value Index')
+        plt.ylabel('Singular Value')
+        plt.title(f'Observability (Rank {r}/13)')
+        plt.grid()
+        plt.legend()
+        plt.show()
 
