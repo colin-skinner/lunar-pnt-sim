@@ -4,6 +4,7 @@ from jax.numpy.linalg import norm
 from dataclasses import dataclass, field
 import jax.numpy as jnp
 import jax
+from tqdm import tqdm
 
 from .quaternion import unit, quat_apply, conj, hamilton_product, unitize_state
 # from .sensors import meas_accel, meas_gyro, meas_laser_alt, meas_laser_vel, meas_star_tracker, meas_range_tracker, SensorNoises
@@ -63,7 +64,7 @@ def reverse_sim_results(results: SimResults):
     reversed_results.t = results.t.copy()  # Instead of reversing it
     
     # Reverse and negate velocities/angular velocities
-    for i in range(n):
+    for i in tqdm(range(n)):
         forward_idx = n - 1 - i
         state_rev = results.states[forward_idx].copy()
         
@@ -255,7 +256,7 @@ def run_sim(state0, nsteps, dt, control_fn, params: SimParams):
     logger.states[0] = state0
 
     final_step = nsteps
-    for step in range(nsteps-1):
+    for step in tqdm(range(nsteps-1)):
         t_curr = logger.t[step]
         state = logger.states[step]
 
@@ -283,27 +284,3 @@ def run_sim(state0, nsteps, dt, control_fn, params: SimParams):
     logger.trunc(final_step)
 
     return logger
-
-# def calc_measurements(results: SimResults, mass: float, sensor_noises: SensorNoises = SensorNoises(), range_tracker_pos: list = None):
-#     states = results.states
-#     forces = results.force_N
-
-#     if range_tracker_pos is None:
-#         range_tracker_pos = [states[0,0:6]]
-
-#     accel = np.array([meas_accel(force / mass, sensor_noises.accel, state[6:10]) for force, state in zip(forces, states)])
-#     print("Accel done")
-#     gyro = np.array([meas_gyro(state[10:13], sensor_noises.gyro, state[6:10]) for state in states]) 
-#     print("Gyro done")
-#     laser_alt = np.array([meas_laser_alt(state, sensor_noises.laser_alt, state[6:10]) for state in states])
-#     print("Laser dist done")
-#     laser_vel = np.array([meas_laser_vel(state, sensor_noises.laser_vel, state[6:10]) for state in states])
-#     print("Laser vel done")
-#     q_star_tracker = np.array([meas_star_tracker(state[6:10], sensor_noises.star_tracker) for state in states])
-#     print("Quat done")
-#     # r_v_range_tracker = np.array([meas_range_tracker(state, range_tracker_pos, sensor_noises.range_tracker) for state in states])
-#     # print("Range tracker done")
-
-#     measurements = SimMeasurements(accel, gyro, laser_alt, laser_vel, q_star_tracker)
-    
-#     return measurements
