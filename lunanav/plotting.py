@@ -121,6 +121,122 @@ def plot_state_vector(
     
     plt.show(block=show)
 
+
+def plot_state_vector_combined(
+    t: np.ndarray,
+    r: np.ndarray,
+    v: np.ndarray,
+    w: np.ndarray,
+    figsize=(15, 10),
+    show=True,
+    title = None
+):
+    figure, axs = plt.subplots(nrows=3, ncols=1, figsize=figsize)
+    title = title if title else "State Vector vs. Time"
+    figure.suptitle(title, fontsize=20)
+
+    # Position - all axes on same plot
+    axs[0].plot(t, r[:, 0], label="X", linewidth=2)
+    axs[0].plot(t, r[:, 1], label="Y", linewidth=2)
+    axs[0].plot(t, r[:, 2], label="Z", linewidth=2)
+    axs[0].set_title("Position vs. Time")
+    axs[0].set_ylabel("Position (m)")
+    axs[0].set_xlabel("Time (s)")
+    axs[0].grid(True)
+    axs[0].legend()
+
+    # Velocity - all axes on same plot
+    axs[1].plot(t, v[:, 0], label="X", linewidth=2)
+    axs[1].plot(t, v[:, 1], label="Y", linewidth=2)
+    axs[1].plot(t, v[:, 2], label="Z", linewidth=2)
+    axs[1].set_title("Velocity vs. Time")
+    axs[1].set_ylabel("Velocity (m/s)")
+    axs[1].set_xlabel("Time (s)")
+    axs[1].grid(True)
+    axs[1].legend()
+
+    # Angular velocity - all axes on same plot
+    axs[2].plot(t, w[:, 0] * RAD_TO_DEG, label="X", linewidth=2)
+    axs[2].plot(t, w[:, 1] * RAD_TO_DEG, label="Y", linewidth=2)
+    axs[2].plot(t, w[:, 2] * RAD_TO_DEG, label="Z", linewidth=2)
+    axs[2].set_title("Angular Velocity vs. Time")
+    axs[2].set_ylabel("Angular Velocity (deg/s)")
+    axs[2].set_xlabel("Time (s)")
+    axs[2].grid(True)
+    axs[2].legend()
+
+    plt.tight_layout()
+    plt.show(block=show)
+
+def plot_state_vector_combined_log(
+    t: np.ndarray,
+    r: np.ndarray,
+    v: np.ndarray,
+    w: np.ndarray,
+    figsize=(15, 10),
+    show=True,
+    title=None,
+    use_abs=True
+):
+    """
+    Plot state vector with logarithmic y-axis scale.
+    
+    Parameters:
+    use_abs: if True, plot absolute values (needed for log scale with negative values)
+    """
+    figure, axs = plt.subplots(nrows=3, ncols=1, figsize=figsize)
+    title = title if title else "State Vector vs. Time (Log Scale)"
+    figure.suptitle(title, fontsize=20)
+
+    # Position - all axes on same plot
+    if use_abs:
+        axs[0].semilogy(t, np.abs(r[:, 0]), label="X", linewidth=2)
+        axs[0].semilogy(t, np.abs(r[:, 1]), label="Y", linewidth=2)
+        axs[0].semilogy(t, np.abs(r[:, 2]), label="Z", linewidth=2)
+    else:
+        axs[0].semilogy(t, r[:, 0], label="X", linewidth=2)
+        axs[0].semilogy(t, r[:, 1], label="Y", linewidth=2)
+        axs[0].semilogy(t, r[:, 2], label="Z", linewidth=2)
+    axs[0].set_title("Position vs. Time (Log)")
+    axs[0].set_ylabel("Position (m)")
+    axs[0].set_xlabel("Time (s)")
+    axs[0].grid(True, which="both", alpha=0.3)
+    axs[0].legend()
+
+    # Velocity - all axes on same plot
+    if use_abs:
+        axs[1].semilogy(t, np.abs(v[:, 0]), label="X", linewidth=2)
+        axs[1].semilogy(t, np.abs(v[:, 1]), label="Y", linewidth=2)
+        axs[1].semilogy(t, np.abs(v[:, 2]), label="Z", linewidth=2)
+    else:
+        axs[1].semilogy(t, v[:, 0], label="X", linewidth=2)
+        axs[1].semilogy(t, v[:, 1], label="Y", linewidth=2)
+        axs[1].semilogy(t, v[:, 2], label="Z", linewidth=2)
+    axs[1].set_title("Velocity vs. Time (Log)")
+    axs[1].set_ylabel("Velocity (m/s)")
+    axs[1].set_xlabel("Time (s)")
+    axs[1].grid(True, which="both", alpha=0.3)
+    axs[1].legend()
+
+    # Angular velocity - all axes on same plot
+    w_deg = w * RAD_TO_DEG
+    if use_abs:
+        axs[2].semilogy(t, np.abs(w_deg[:, 0]), label="X", linewidth=2)
+        axs[2].semilogy(t, np.abs(w_deg[:, 1]), label="Y", linewidth=2)
+        axs[2].semilogy(t, np.abs(w_deg[:, 2]), label="Z", linewidth=2)
+    else:
+        axs[2].semilogy(t, w_deg[:, 0], label="X", linewidth=2)
+        axs[2].semilogy(t, w_deg[:, 1], label="Y", linewidth=2)
+        axs[2].semilogy(t, w_deg[:, 2], label="Z", linewidth=2)
+    axs[2].set_title("Angular Velocity vs. Time (Log)")
+    axs[2].set_ylabel("Angular Velocity (deg/s)")
+    axs[2].set_xlabel("Time (s)")
+    axs[2].grid(True, which="both", alpha=0.3)
+    axs[2].legend()
+
+    plt.tight_layout()
+    plt.show(block=show)
+    
 def plot_control_effort(t: np.ndarray,
     force: np.ndarray,
     torque: np.ndarray,
