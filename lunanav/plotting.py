@@ -119,7 +119,7 @@ def plot_state_vector(
     plot_subplot(axs[1], t, w[:,1] * RAD_TO_DEG, "Angular Velocity", "Y", "deg/s")
     plot_subplot(axs[2], t, w[:,2] * RAD_TO_DEG, "Angular Velocity", "Z", "deg/s")
     
-    plt.show(block=show)
+    plt.show(block=False)
 
 
 def plot_state_vector_combined(
