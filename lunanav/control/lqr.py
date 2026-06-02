@@ -100,11 +100,28 @@ def ilqr_lander(f,
         P[N] = QN
         p[N] = q_N
 
-        for k in range(N-1, -1, -1):
+        for k in tqdm(range(N-1, -1, -1)):
             H_xu = A[k].T @ P[k+1] @ B[k]
             H_xx = Q + A[k].T @ P[k+1] @ A[k]
             H_uu = R + B[k].T @ P[k+1] @ B[k]
 
+
+
+        # Check for problems
+            # if np.any(np.isnan(H_uu)) or np.any(np.isinf(H_uu)):
+            #     print(f"Step {k}: NaN/Inf in H_uu")
+            #     print(f"  B[k] rank: {np.linalg.matrix_rank(B[k])}")
+            #     print(f"  P[k+1] condition: {np.linalg.cond(P[k+1])}")
+            #     break
+            
+            # det = np.linalg.det(H_uu)
+            # if abs(det) < 1e-15:
+            #     print(f"Step {k}: H_uu is singular (det={det:.2e})")
+            #     print(f"  H_uu eigenvalues: {np.linalg.eigvals(H_uu)}")
+            #     print(f"  R:\n{R}")
+            #     break
+
+            
             q_k = Q @ (s_bar[k] - s_goal) # From part (b)
             r_k = R @ u_bar[k] # From part (b)
 

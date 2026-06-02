@@ -52,7 +52,7 @@ def get_full_state_costs():
 
     # Input weights — penalize fuel use / aggressive control
     R = np.diag([
-        5e-1, 5e-1, 5e-1,    # force (N) — low to allow control authority
+        5e-1,    # force (N) — low to allow control authority
         1e-6, 1e-6, 1e-6,    # torque (N·m) — moderate
     ])
 
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     start = time.time()
     t = np.arange(0.0, T, dt)
     N = t.size - 1
-    s_bar, u_bar, Y, y = ilqr_lander(next_state_wrapper, s0, s_goal, N, Q, R, QN, max_iters=20)
+    s_bar, u_bar, Y, y = ilqr_lander(next_state_wrapper, s0, s_goal, N, Q, R, QN, max_iters=5)
     print("done! ({:.2f} s)".format(time.time() - start), flush=True)
 
     ####################################################################################################
@@ -171,6 +171,7 @@ if __name__ == "__main__":
     # breakpoint()
 
 
+
     ####################################################################################################
     #                Turning position iLQR s_bar into a trajectory tracking for attitude iLQR
     ####################################################################################################
@@ -180,8 +181,8 @@ if __name__ == "__main__":
     q_rots = [angle_axis_to_q(theta_k, [1,0,0]) for theta_k in theta] # desired quaternion from angle
 
     # ---------------------------------------- Force ----------------------------------------
-    u_bar_tracking = np.zeros_like(u_bar)
-    u_bar_tracking[:,2] = F_norms # feedforward force from position iLQR, but no torque feedforward
+    u_bar_tracking = np.zeros_like(u_bar[:,:4])
+    u_bar_tracking[:,0] = F_norms # feedforward force from position iLQR, but no torque feedforward
 
 
     # ---------------------------------------- r,v,q ----------------------------------------
@@ -198,22 +199,21 @@ if __name__ == "__main__":
     omega = remove_outliers(omega, 4, 600)
     s_bar_tracking[:,10:13] = omega
 
-    
+
     # ---------------------------------------- Torque ----------------------------------------
     alpha = np.diff(omega, axis=0) / dt
     alpha = remove_outliers(alpha, 3.5, 600) # smooth (manual lmao)
 
     torque = alpha @ I.T # feedforward torque from desired angular acceleration
-    u_bar_tracking[:,3:6] = torque
-    
+    u_bar_tracking[:,1:4] = torque
+
     # lowkey kinda noisy sometimes so 
     plot_state_vector(t, s_bar_tracking[:,0:3] - np.tile(moon_offset, (t.size, 1)), s_bar_tracking[:,3:6], s_bar_tracking[:,10:13])
-    breakpoint()
 
-    visualize_trajectory(s_bar_tracking, t, dt, offset = moon_offset, downsample_rate=5, moon_resolution = 35).show()
-    plot_control_effort(t[1:], u_bar_tracking[:,0:3], u_bar_tracking[:,3:6])
+    visualize_trajectory(s_bar_tracking, t, dt, offset = moon_offset, downsample_rate=5, moon_resolution = 35, show_lander=False).show()
+    # plot_control_effort(t[1:], np.tile(u_bar_tracking[:,0], (1, 1)), u_bar_tracking[:,1:4])
+    plt.plot(u_bar_tracking[:,0])
 
-    breakpoint()
 
     ####################################################################################################
     #                With attitude iLQR from the start (full state cost)
@@ -225,8 +225,7 @@ if __name__ == "__main__":
     # t: float, state: jnp.ndarray, disturbances: jnp.ndarray, mass_kg: float, I: np.ndarray):
     def next_state_wrapper(s, u):
         force_I = u[0:3]
-        force_B = abs(u[5]) * np.array([0, 0, 1]) # just in z direction
-        # force_B = u[3:6]
+        force_B = abs(u[0]) * np.array([0, 0, 1]) # just in z direction
         return lander_motion(s, force_I, force_B, dt, mass_kg, I) # mass and I from earlier
 
 
