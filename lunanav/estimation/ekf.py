@@ -22,7 +22,7 @@ class EkfParams:
     H: Callable[[jnp.ndarray], jnp.ndarray] # measurement Jacobian function
     h: Callable[[jnp.ndarray], jnp.ndarray] # measurement function
 
-@jax.jit
+# @jax.jit
 def ekf_predict(x: jnp.ndarray, P: jnp.ndarray, a_meas: jnp.ndarray, w_meas: jnp.ndarray,
                 Q: jnp.ndarray, sim: SimParams) -> jnp.ndarray:
     
@@ -37,7 +37,7 @@ def ekf_predict(x: jnp.ndarray, P: jnp.ndarray, a_meas: jnp.ndarray, w_meas: jnp
 
     return x_next, P_next
 
-@jax.jit
+# @jax.jit
 def ekf_update(x: jnp.ndarray, P: jnp.ndarray, meas: jnp.ndarray, H: jnp.ndarray, x_expected: jnp.ndarray, R: jnp.ndarray) -> jnp.ndarray:
 
     y = meas - x_expected

@@ -50,13 +50,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super().default(obj)
-
-
 @dataclass
 class Trajectory:
     s_bar: np.ndarray
@@ -112,7 +105,7 @@ def save_trajectory(traj: Trajectory, filepath: str) -> None:
         "torque": traj.torque.tolist(),
     }
     with open(filepath, 'w') as f:
-        json.dump(data, f, cls=NumpyEncoder)
+        json.dump(data, f, indent=4)
 
 
 def load_trajectory(filepath: str) -> Trajectory:
@@ -149,7 +142,7 @@ def save_sim_result(result: SimResult, filepath: str) -> None:
         },
     }
     with open(filepath, 'w') as f:
-        json.dump(data, f, cls=NumpyEncoder)
+        json.dump(data, f, indent=4)
 
 
 def load_sim_result(filepath: str) -> SimResult:
@@ -181,7 +174,7 @@ def save_ekf_result(result: EKFResult, filepath: str) -> None:
         "I": result.I.tolist(),
     }
     with open(filepath, 'w') as f:
-        json.dump(data, f, cls=NumpyEncoder)
+        json.dump(data, f, indent=4)
 
 
 def load_ekf_result(filepath: str) -> EKFResult:
