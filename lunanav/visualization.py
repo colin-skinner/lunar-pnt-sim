@@ -1,6 +1,7 @@
 import numpy as np
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 from numpy.linalg import svd
 import jax
 import jax.numpy as jnp
@@ -665,3 +666,106 @@ def obsv_verbose(x, sensor_suite: SensorSuite, a_m, w_m, Q, sim, env, h=3, show_
         plt.legend()
         plt.show()
 
+
+
+def plot_satellites_3d_plotly(sats, lander_position=None, figsize=(1200, 1000)):
+    """Interactive 3D Plotly plot of satellite orbits and optional lander trajectory."""
+    fig = go.Figure()
+    fig.add_trace(moon_surface(radius=R_MOON, offset=np.zeros(3), resolution=30, color='#444444'))
+
+    sat_colors = ['#e74c3c', '#3498db', '#2ecc71']
+
+    for i, sat in enumerate(sats):
+        c = sat_colors[i % len(sat_colors)]
+        fig.add_trace(go.Scatter3d(
+            x=sat.r[:, 0], y=sat.r[:, 1], z=sat.r[:, 2],
+            mode='lines', name=f'Satellite {i} Orbit',
+            line=dict(color=c, width=4),
+        ))
+        fig.add_trace(go.Scatter3d(
+            x=[sat.r[0, 0]], y=[sat.r[0, 1]], z=[sat.r[0, 2]],
+            mode='markers', marker=dict(size=10, color=c, symbol='circle'),
+            name=f'Sat {i} Start', showlegend=False,
+        ))
+        fig.add_trace(go.Scatter3d(
+            x=[sat.r[-1, 0]], y=[sat.r[-1, 1]], z=[sat.r[-1, 2]],
+            mode='markers', marker=dict(size=10, color=c, symbol='square'),
+            name=f'Sat {i} End', showlegend=False,
+        ))
+
+    if lander_position is not None:
+        fig.add_trace(go.Scatter3d(
+            x=lander_position[:, 0], y=lander_position[:, 1], z=lander_position[:, 2],
+            mode='lines', name='Lander Trajectory',
+            line=dict(color='#9b59b6', width=5, dash='dash'),
+        ))
+        fig.add_trace(go.Scatter3d(
+            x=[lander_position[0, 0]], y=[lander_position[0, 1]], z=[lander_position[0, 2]],
+            mode='markers', marker=dict(size=12, color='#9b59b6', symbol='diamond'),
+            name='Lander Start', showlegend=False,
+        ))
+
+    all_coords = np.vstack([sat.r for sat in sats] + ([lander_position] if lander_position is not None else []))
+    max_range = max(np.max(np.abs(all_coords)) * 1.2, R_MOON * 1.5)
+
+    fig.update_layout(
+        title='<b>Satellite Orbits & Lander Trajectory</b>',
+        scene=dict(
+            xaxis=dict(title='X (m)', range=[-max_range, max_range]),
+            yaxis=dict(title='Y (m)', range=[-max_range, max_range]),
+            zaxis=dict(title='Z (m)', range=[-max_range, max_range]),
+            aspectmode='cube',
+        ),
+        width=figsize[0], height=figsize[1],
+    )
+    return fig
+
+
+def plot_filter_uncertainty_diag(Sigma_arr, t, figsize=(15, 10), use_variance=False) -> Figure:
+    """Plot diagonal of EKF covariance matrix (std dev or variance) over time."""
+    n_steps = len(Sigma_arr)
+    pos_diag     = np.array([np.diag(Sigma_arr[i,  0:3,  0:3]) for i in range(n_steps)])
+    vel_diag     = np.array([np.diag(Sigma_arr[i,  3:6,  3:6]) for i in range(n_steps)])
+    att_diag     = np.array([np.diag(Sigma_arr[i, 6:10, 6:10]) for i in range(n_steps)])
+    ang_vel_diag = np.array([np.diag(Sigma_arr[i, 10:13, 10:13]) for i in range(n_steps)])
+
+    if not use_variance:
+        pos_diag, vel_diag, att_diag, ang_vel_diag = (
+            np.sqrt(pos_diag), np.sqrt(vel_diag), np.sqrt(att_diag), np.sqrt(ang_vel_diag))
+
+    metric = 'Variance' if use_variance else 'Std Dev'
+    fig, axs = plt.subplots(2, 2, figsize=figsize)
+    fig.suptitle('EKF Covariance Diagonal Elements Over Time', fontsize=14, fontweight='bold')
+
+    axs[0, 0].semilogy(t, pos_diag[:, 0], 'r-', label='X', linewidth=2)
+    axs[0, 0].semilogy(t, pos_diag[:, 1], 'g-', label='Y', linewidth=2)
+    axs[0, 0].semilogy(t, pos_diag[:, 2], 'b-', label='Z', linewidth=2)
+    axs[0, 0].set_ylabel(f'{metric} (m{"²" if use_variance else ""})', fontsize=10)
+    axs[0, 0].set_title('Position', fontsize=11, fontweight='bold')
+    axs[0, 0].grid(alpha=0.3, which='both'); axs[0, 0].legend(fontsize=9)
+
+    axs[0, 1].semilogy(t, vel_diag[:, 0], 'r-', label='VX', linewidth=2)
+    axs[0, 1].semilogy(t, vel_diag[:, 1], 'g-', label='VY', linewidth=2)
+    axs[0, 1].semilogy(t, vel_diag[:, 2], 'b-', label='VZ', linewidth=2)
+    axs[0, 1].set_ylabel(f'{metric} (m/s{"" if not use_variance else "²/s²"})', fontsize=10)
+    axs[0, 1].set_title('Velocity', fontsize=11, fontweight='bold')
+    axs[0, 1].grid(alpha=0.3, which='both'); axs[0, 1].legend(fontsize=9)
+
+    axs[1, 0].semilogy(t, att_diag[:, 0], 'r-', label='q0', linewidth=2)
+    axs[1, 0].semilogy(t, att_diag[:, 1], 'g-', label='q1', linewidth=2)
+    axs[1, 0].semilogy(t, att_diag[:, 2], 'b-', label='q2', linewidth=2)
+    axs[1, 0].semilogy(t, att_diag[:, 3], color='orange', label='q3', linewidth=2)
+    axs[1, 0].set_ylabel(metric, fontsize=10); axs[1, 0].set_xlabel('Time (s)', fontsize=10)
+    axs[1, 0].set_title('Attitude (Quaternion)', fontsize=11, fontweight='bold')
+    axs[1, 0].grid(alpha=0.3, which='both'); axs[1, 0].legend(fontsize=9)
+
+    axs[1, 1].semilogy(t, ang_vel_diag[:, 0], 'r-', label='ωX', linewidth=2)
+    axs[1, 1].semilogy(t, ang_vel_diag[:, 1], 'g-', label='ωY', linewidth=2)
+    axs[1, 1].semilogy(t, ang_vel_diag[:, 2], 'b-', label='ωZ', linewidth=2)
+    axs[1, 1].set_ylabel(f'{metric} (rad/s{"" if not use_variance else "²/s²"})', fontsize=10)
+    axs[1, 1].set_xlabel('Time (s)', fontsize=10)
+    axs[1, 1].set_title('Angular Velocity', fontsize=11, fontweight='bold')
+    axs[1, 1].grid(alpha=0.3, which='both'); axs[1, 1].legend(fontsize=9)
+
+    plt.tight_layout()
+    return fig

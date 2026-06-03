@@ -97,10 +97,10 @@ def save_trajectory(traj: Trajectory, filepath: str) -> None:
         "dt": traj.dt, 
         "T": traj.T, 
         "nsteps": traj.nsteps,
-        "state0": traj.state0, 
+        "state0": traj.state0.tolist(), 
         "mass_kg": traj.mass_kg, 
         "I": traj.I.tolist(),
-        "t": traj.t, 
+        "t": traj.t.tolist(), 
         "force": traj.force.tolist(), 
         "torque": traj.torque.tolist(),
     }
