@@ -284,7 +284,7 @@ def sat_range_tracker_sensor(n_sats: int, noise_std: float) -> Sensor:
         return jnp.array(measurements)
     
     return Sensor(
-        name=SensorName.DOPPLER,  # or custom RANGE
+        name=SensorName.RANGE_TRACKER,
         measurement_fn=meas_fn,
         noise_cov=jnp.eye(n_sats) * (noise_std ** 2),
         meas_dim=n_sats

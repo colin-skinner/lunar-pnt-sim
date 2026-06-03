@@ -15,7 +15,7 @@ Trajectory:
 
 SimResult:
     trajectory_file  str         filename of the Trajectory used to generate this
-    s_true      [N+1, 13]   true simulated states
+    s_arr      [N+1, 13]   true simulated states
     t_arr       [N+1]       time array
     dt          float
     nsteps      int
@@ -68,7 +68,9 @@ class Trajectory:
 @dataclass
 class SimResult:
     trajectory_file: str
-    s_true: np.ndarray
+    s_arr: np.ndarray
+    force: np.ndarray
+    torque: np.ndarray
     t_arr: np.ndarray
     dt: float
     nsteps: int
@@ -130,7 +132,9 @@ def save_sim_result(result: SimResult, filepath: str) -> None:
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     data = {
         "trajectory_file": result.trajectory_file,
-        "s_true": result.s_true.tolist(),
+        "s_arr": result.s_arr.tolist(),
+        "force": result.force.tolist(),
+        "torque": result.torque.tolist(),
         "t_arr": result.t_arr.tolist(),
         "dt": result.dt,
         "nsteps": result.nsteps,
@@ -154,9 +158,14 @@ def load_sim_result(filepath: str) -> SimResult:
     }
     return SimResult(
         trajectory_file=d["trajectory_file"],
-        s_true=np.array(d["s_true"]), t_arr=np.array(d["t_arr"]),
-        dt=float(d["dt"]), nsteps=int(d["nsteps"]),
-        mass_kg=float(d["mass_kg"]), I=np.array(d["I"]),
+        s_arr=np.array(d["s_arr"]),
+        force=np.array(d["force"]),
+        torque=np.array(d["torque"]),
+        t_arr=np.array(d["t_arr"]),
+        dt=float(d["dt"]),
+        nsteps=int(d["nsteps"]),
+        mass_kg=float(d["mass_kg"]),
+        I=np.array(d["I"]),
         measurements=measurements,
     )
 
