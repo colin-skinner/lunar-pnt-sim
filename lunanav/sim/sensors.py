@@ -19,39 +19,6 @@ class SensorName(Enum):
     STAR_TRACKER = "star_tracker"
     DOPPLER = "doppler"
     RANGE_TRACKER = "range_tracker"
-    TERRAIN_RELATIVE_NAV = "terrain_relative_nav"
-
-
-# @dataclass
-# class SensorNoises:
-#     accel: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
-#     gyro: np.ndarray = field(default_factory=lambda: np.zeros((3,3)))
-#     laser_alt: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
-#     laser_vel: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
-#     star_tracker: np.ndarray = field(default_factory=lambda: np.zeros((4,4)))
-#     range_tracker: np.ndarray = field(default_factory=lambda: np.zeros((6,6)))
-
-# ####################################################################################################
-# #                                       Accel
-# ####################################################################################################
-
-# def meas_accel(accel_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
-#     """Measure acceleration with additive Gaussian noise."""
-#     del orientation  # TODO
-#     if R.shape != (3, 3):
-#         raise ValueError(f"Expected R shape (3,3), got {R.shape}")
-#     return accel_body + np.random.multivariate_normal(np.zeros(3), R)
-
-# ####################################################################################################
-# #                                       Gyro
-# ####################################################################################################
-
-# def meas_gyro(gyro_body: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
-#     """Measure angular velocity with additive Gaussian noise."""
-#     del orientation  # TODO
-#     if R.shape != (3, 3):
-#         raise ValueError(f"Expected R shape (3,3), got {R.shape}")
-#     return gyro_body + np.random.multivariate_normal(np.zeros(3), R)
 
 # ####################################################################################################
 # #                                       Line-of-sight Distance
@@ -69,65 +36,46 @@ def get_los_vectors():
     return los_vectors # already calculated when module is imported, so only calculated once
 
 @jax.jit
-def dist_from_los(state: jnp.ndarray) -> jnp.ndarray:
-    """Compute distance to lunar surface from line-of-sight vectors."""
-    # TODO: deal with tilting past 90º
+def dist_from_los(state, altimeter_bound_m = 100e3, min_dist_inside_moon = 10e3):
+    """
+    Find intersection of LOS rays with lunar sphere.
+    LOS ray: r + t * d, where d is LOS direction in inertial frame.
+    Sphere: |x| = R_MOON.
+    
+    Solve: |r + t*d|^2 = R_MOON^2
+    Quadratic in t: t^2 + 2*(r·d)*t + |r|^2 - R_MOON^2 = 0
+    """
     r, q_B2L = state[0:3], state[6:10]
+    r_norm = norm(r)
     vecs_body = get_los_vectors()
     distances = []
 
     for v in vecs_body:
-        vec_inertial = quat_apply(q_B2L, v)
-        tilt_rad = jnp.arccos(jnp.dot(r, vec_inertial) / norm(r) / norm(vec_inertial))
-        alt = norm(r) - R_MOON
-        dist = alt / jnp.cos(tilt_rad)
-        distances.append(jnp.abs(dist))
+        d = quat_apply(q_B2L, v)
+        d = unit(d)
+        r_along_d = jnp.dot(r,d) / norm(d) # negative if "opposite direction"
+        cos_angle = r_along_d / r_norm
+        sin_angle = jnp.sqrt(1 - cos_angle**2)
+        r_perp_d = r_norm * sin_angle
+
+        dist_inside_moon_2 = R_MOON**2 - r_perp_d**2
+
+        LOS_dist = abs(r_along_d) - jnp.sqrt(dist_inside_moon_2)
+
+        # If closest point is inside moon (with bound)
+        distance = jnp.where(dist_inside_moon_2 > min_dist_inside_moon**2, LOS_dist, jnp.nan)
+
+        # If point is even in moon direction and not behind lander
+        distance = jnp.where(r_along_d < 0,    distance,     jnp.nan)
+
+        # Max bound
+        distance = jnp.where(LOS_dist <= altimeter_bound_m, distance, jnp.nan)
+
+
+        distances.append(distance)
+    
 
     return jnp.array(distances)
-
-# # """Could be a better one"""
-# # def dist_from_los(state):
-# #     """
-# #     Find intersection of LOS rays with lunar sphere.
-# #     LOS ray: r + t * d, where d is LOS direction in inertial frame.
-# #     Sphere: |x| = R_MOON.
-    
-# #     Solve: |r + t*d|^2 = R_MOON^2
-# #     Quadratic in t: t^2 + 2*(r·d)*t + |r|^2 - R_MOON^2 = 0
-# #     """
-# #     r, q_B2L = state[0:3], state[6:10]
-# #     vecs_body = get_los_vectors()
-# #     distances = []
-
-# #     for v in vecs_body:
-# #         d = quat_apply(q_B2L, v)
-# #         d = d / jnp.linalg.norm(d)  # ensure unit vector
-        
-# #         # Quadratic coefficients
-# #         b = jnp.dot(r, d)
-# #         c = jnp.dot(r, r) - R_MOON**2
-        
-# #         discriminant = b**2 - c
-        
-# #         # Two solutions: t = -b ± sqrt(discriminant)
-# #         # Pick the smaller positive one (closer intersection)
-# #         t = -b - jnp.sqrt(jnp.maximum(discriminant, 0))
-        
-# #         # If discriminant < 0, no intersection (LOS misses surface)
-# #         dist = jnp.where(discriminant > 0, t, jnp.nan)
-# #         # If t < 0, surface is behind us — also invalid
-# #         dist = jnp.where(t > 0, dist, jnp.nan)
-        
-# #         distances.append(dist)
-
-# #     return jnp.array(distances)
-
-# def meas_laser_alt(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
-#     """Measure laser range with additive Gaussian noise."""
-#     del orientation  # TODO
-#     if R.shape != (4, 4):
-#         raise ValueError(f"Expected R shape (4,4), got {R.shape}")
-#     return dist_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
 
 
 # ####################################################################################################
@@ -138,6 +86,8 @@ def dist_from_los(state: jnp.ndarray) -> jnp.ndarray:
 def dist_rate_from_los(state: jnp.ndarray) -> jnp.ndarray:
     """Compute range-rate (time derivative of distance) via chain rule."""
     r, v, q, w = state[0:3], state[3:6], state[6:10], state[10:13]
+
+    mask = jnp.isnan(dist_from_los(state))
 
     def dist_wrt_r(r_val: jnp.ndarray) -> jnp.ndarray:
         return dist_from_los(jnp.concatenate([r_val, v, q, w]))
@@ -151,64 +101,11 @@ def dist_rate_from_los(state: jnp.ndarray) -> jnp.ndarray:
     drdt = v
     dqdt = 0.5 * hamilton_product(q, w)
 
-    return dD_dr @ drdt + dD_dq @ dqdt  # (4,)
+    vels = dD_dr @ drdt + dD_dq @ dqdt
+    vels = jnp.where(mask, jnp.nan, vels)
 
-# def meas_laser_vel(state: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
-#     """Measure laser range-rate with additive Gaussian noise."""
-#     del orientation  # TODO
-#     if R.shape != (4, 4):
-#         raise ValueError(f"Expected R shape (4,4), got {R.shape}")
-#     return dist_rate_from_los(state) + np.random.multivariate_normal(np.zeros(4), R)
+    return vels  # (4,)
 
-# ####################################################################################################
-# #                                       Star tracker
-# ####################################################################################################
-
-# def meas_star_tracker(q_B2L: np.ndarray, R: np.ndarray, orientation: np.ndarray = None) -> np.ndarray:
-#     """Measure attitude (quaternion) with additive Gaussian noise."""
-#     del orientation  # TODO
-#     if R.shape != (4, 4):
-#         raise ValueError(f"Expected R shape (4,4), got {R.shape}")
-#     return unit(q_B2L + np.random.multivariate_normal(np.zeros(4), R))
-
-# ####################################################################################################
-# #                                       Range Tracker
-# ####################################################################################################
-
-# def meas_range_tracker(state, launchsite_pos, R: jnp.ndarray):
-#     """[r, v] in inertial"""
-#     r_lander = state[0:3]
-#     v_lander = state[3:6]
-
-#     print(np.array(launchsite_pos).shape)
-#     print(R.shape)
-
-#     measurements = []
-#     for s in launchsite_pos:
-#         rel_pos = r_lander - s[0:3]
-#         rel_vel = v_lander - s[3:6]  # launch sites might be moving; subtract their vel
-#         measurements.append(jnp.concatenate([rel_pos, rel_vel]))
-
-#     return jnp.concatenate(measurements) + np.random.multivariate_normal(np.zeros(len(measurements)), R)
-
-#     # return jnp.ravel(measurements) +
-
-
-####################################################################################################
-#                          NEW SENSOR ARCHITECTURE (EKF-Ready)
-####################################################################################################
-# This section implements a composable sensor abstraction for easy addition of sensors,
-# automatic Jacobian computation, and clean EKF integration. All functions support
-# time-varying sensor environments (e.g., non-stationary satellites, terrain maps).
-#
-# Usage:
-#   1. Define a SensorEnvironment with time-varying parameters
-#   2. Create Sensor objects via factory functions
-#   3. Call sensor.measure(state, env) and sensor.jacobian(state, env) in EKF loop
-#
-# NOTE: This is new scaffolding. Measurement functions above are still used for
-# backward compatibility and batch processing. Once fully migrated, batch processing
-# will also use this architecture.
 
 ####################################################################################################
 #                             Environment (for stuff like satellite positions)
@@ -392,33 +289,6 @@ def sat_range_tracker_sensor(n_sats: int, noise_std: float) -> Sensor:
         noise_cov=jnp.eye(n_sats) * (noise_std ** 2),
         meas_dim=n_sats
     )
-
-
-# def terrain_relative_nav_sensor(terrain_map: jnp.ndarray, noise_std: float) -> Sensor:
-#     """
-#     Terrain-relative nav: measures altitude above terrain.
-
-#     Args:
-#         terrain_map: 2D elevation grid [height, width]
-#         noise_std: measurement noise standard deviation
-#     """
-#     def meas_fn(state: jnp.ndarray, env: SensorEnvironment) -> jnp.ndarray:
-#         r_lander = state[0:3]
-
-#         ix = jnp.clip(int(r_lander[0] / 10), 0, terrain_map.shape[0] - 1)
-#         iy = jnp.clip(int(r_lander[1] / 10), 0, terrain_map.shape[1] - 1)
-#         z_terrain = terrain_map[ix, iy]
-
-#         alt_above_terrain = r_lander[2] - z_terrain
-#         return jnp.array([alt_above_terrain])
-
-#     return Sensor(
-#         name=SensorName.TERRAIN_RELATIVE_NAV,
-#         measurement_fn=meas_fn,
-#         noise_cov=jnp.array([[noise_std ** 2]]),
-#         meas_dim=1
-#     )
-
 
 @dataclass
 class SensorSuite:
