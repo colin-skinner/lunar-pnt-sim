@@ -193,7 +193,7 @@ def lander_motion(state: jnp.ndarray, force_B: jnp.ndarray, torque_B: jnp.ndarra
     ----------
     state : jnp.ndarray (13,)
         Initial state vector [r, v, q, w]
-    force : jnp.ndarray (3,)
+    force_B : jnp.ndarray (3,)
         Force acting on the body (in body frame) `[N]`
     torque_B : jnp.ndarray (3,)
         Torque acting on the body (in body frame) `[Nm]`

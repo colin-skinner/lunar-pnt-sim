@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Callable
 from scipy.linalg import block_diag
 import jax.numpy as jnp
+import jax
 
 from ..sim.simulator import rigid_body_derivative, lander_motion, linearized_lander_motion
 from ..sim.simulator import SimParams
@@ -21,6 +22,7 @@ class EkfParams:
     H: Callable[[jnp.ndarray], jnp.ndarray] # measurement Jacobian function
     h: Callable[[jnp.ndarray], jnp.ndarray] # measurement function
 
+
 def ekf_predict(x: jnp.ndarray, P: jnp.ndarray, a_meas: jnp.ndarray, w_meas: jnp.ndarray,
                 Q: jnp.ndarray, sim: SimParams) -> jnp.ndarray:
     
@@ -28,20 +30,10 @@ def ekf_predict(x: jnp.ndarray, P: jnp.ndarray, a_meas: jnp.ndarray, w_meas: jnp
     force_B = a_meas * sim.body.mass_kg
     torque_B = jnp.zeros(3) # TODO: not doing torque_B input right now
     x_next = lander_motion(x_copy, force_B, torque_B, sim.dt, sim.body.mass_kg, sim.body.I)
-    Fd = linearized_lander_motion(x_copy, force_B, torque_B, sim.dt, sim.body.mass_kg, sim.body.I)
-
-    # if any(np.isnan(x_next)):
-    #     print(x_copy)
-    #     print(force_B)
-    #     print(torque_B)
-    #     print()
-    #     raise ValueError("EKF prediction step resulted in invalid state")
-        
+    
+    Fd = jax.jacfwd(lambda s: lander_motion(s, force_B, torque_B, sim.dt, sim.body.mass_kg, sim.body.I))(x_copy)
 
     P_next = Fd @ P @ Fd.T + Q
-
-    # print(f"  ||Fd||={np.linalg.norm(Fd):.4f}, max={np.max(np.abs(Fd)):.4f}")
-    # print(f"  Fd[6:10, 10:13] (quat-omega block):\n{Fd[6:10, 10:13]}")
 
     return x_next, P_next
 
