@@ -1,167 +1,112 @@
-"""Simple save/load for trajectories and EKF results."""
+"""Simple save/load for trajectories, sim results, and EKF results.
+
+All functions accept and return plain dicts. On load, JSON lists are
+converted back to numpy arrays for known array fields.
+
+Trajectory dict keys:
+    s_bar     [N+1, 13]   nominal states
+    u_bar     [N, m]      nominal controls
+    dt        float
+    T         float
+    nsteps    int
+    state0    [13]
+    mass_kg   float
+    I         [3, 3]
+
+SimResult dict keys:
+    s_true        [N+1, 13]
+    t_arr         [N+1]
+    dt            float
+    nsteps        int
+    mass_kg       float
+    I             [3, 3]
+    measurements  dict of {sensor_name: sensor_dict}
+                  sensor_name: str, e.g. "laser_altimeter", "doppler"
+                  sensor_dict keys:
+                      truth  [N, dim]   noiseless measurements at each timestep
+                      noisy  [N, dim]   noisy measurements, NaN where invalid/out of range
+                  dims by sensor:
+                      accelerometer   [N, 3]
+                      gyroscope       [N, 3]
+                      laser_altimeter [N, 4]   (4 LOS beams)
+                      laser_velocity  [N, 4]   (4 LOS beams)
+                      star_tracker    [N, 4]   (quaternion)
+                      doppler         [N, n_sats]
+                      range_tracker   [N, n_sats]
+
+EKFResult dict keys:
+    mu_arr    [N, 13]
+    Sigma_arr [N, 13, 13]
+    t_arr     [N]
+    dt        float
+    nsteps    int
+    mass_kg   float
+    I         [3, 3]
+"""
 
 import json
 import numpy as np
-from dataclasses import dataclass
 from pathlib import Path
 
 
 class NumpyEncoder(json.JSONEncoder):
-    """JSON encoder for numpy arrays"""
+    """JSON encoder that converts numpy arrays to lists."""
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         return super().default(obj)
 
 
-@dataclass
-class Trajectory:
-    """iLQR trajectory solution"""
-    s_bar: np.ndarray  # Nominal states [N+1, 13]
-    u_bar: np.ndarray  # Nominal controls [N, m]
-    dt: float  # Time step (s)
-    T: float  # Total duration (s)
-    nsteps: int  # Number of steps
-    state0: np.ndarray  # Initial state [13]
-    mass_kg: float  # Vehicle mass (kg)
-    I: np.ndarray  # Inertia matrix [3, 3]
-
-
-@dataclass
-class SensorData:
-    """Truth and noisy measurements for one sensor over the simulation."""
-    truth: np.ndarray   # Noiseless measurements [N, dim]
-    noisy: np.ndarray   # Noisy measurements [N, dim], NaN where invalid
-
-
-@dataclass
-class SimResult:
-    """Full simulation run: true trajectory + per-sensor measurements."""
-    s_true: np.ndarray                   # True simulated states [N+1, 13]
-    t_arr: np.ndarray                    # Time array [N+1]
-    measurements: dict                   # {sensor_name: SensorData}
-
-    # Sim parameters (mirrors Trajectory for standalone use)
-    dt: float
-    nsteps: int
-    mass_kg: float
-    I: np.ndarray
-
-
-@dataclass
-class EKFResult:
-    """EKF filter results"""
-    mu_arr: np.ndarray  # State estimates [N, 13]
-    Sigma_arr: np.ndarray  # Covariance [N, 13, 13]
-    t_arr: np.ndarray  # Time array [N]
-
-    # Simulation parameters (for reproducibility)
-    dt: float
-    nsteps: int
-    mass_kg: float
-    I: np.ndarray
-
-
-def save_trajectory(traj: Trajectory, filepath: str) -> None:
-    """Save trajectory to JSON"""
+def _save(data: dict, filepath: str) -> None:
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
-    data = {
-        "s_bar": traj.s_bar,
-        "u_bar": traj.u_bar,
-        "dt": float(traj.dt),
-        "T": float(traj.T),
-        "nsteps": int(traj.nsteps),
-        "state0": traj.state0,
-        "mass_kg": float(traj.mass_kg),
-        "I": traj.I,
-    }
     with open(filepath, 'w') as f:
         json.dump(data, f, cls=NumpyEncoder)
 
 
-def load_trajectory(filepath: str) -> Trajectory:
-    """Load trajectory from JSON"""
+def _load(filepath: str) -> dict:
     with open(filepath, 'r') as f:
-        data = json.load(f)
-
-    return Trajectory(
-        s_bar=np.array(data["s_bar"]),
-        u_bar=np.array(data["u_bar"]),
-        dt=float(data["dt"]),
-        T=float(data["T"]),
-        nsteps=int(data["nsteps"]),
-        state0=np.array(data["state0"]),
-        mass_kg=float(data["mass_kg"]),
-        I=np.array(data["I"]),
-    )
+        return json.load(f)
 
 
-def save_sim_result(result: SimResult, filepath: str) -> None:
-    """Save full simulation result to JSON."""
-    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
-    meas_data = {}
-    for name, sd in result.measurements.items():
-        meas_data[name] = {"truth": sd.truth, "noisy": sd.noisy}
-    data = {
-        "s_true": result.s_true,
-        "t_arr": result.t_arr,
-        "measurements": meas_data,
-        "dt": float(result.dt),
-        "nsteps": int(result.nsteps),
-        "mass_kg": float(result.mass_kg),
-        "I": result.I,
-    }
-    with open(filepath, 'w') as f:
-        json.dump(data, f, cls=NumpyEncoder)
+_TRAJECTORY_ARRAYS = {"s_bar", "u_bar", "state0", "I"}
+_SIM_ARRAYS = {"s_true", "t_arr", "I"}
+_EKF_ARRAYS = {"mu_arr", "Sigma_arr", "t_arr", "I"}
 
 
-def load_sim_result(filepath: str) -> SimResult:
-    """Load full simulation result from JSON."""
-    with open(filepath, 'r') as f:
-        data = json.load(f)
-
-    measurements = {
-        name: SensorData(truth=np.array(sd["truth"]), noisy=np.array(sd["noisy"]))
-        for name, sd in data["measurements"].items()
-    }
-    return SimResult(
-        s_true=np.array(data["s_true"]),
-        t_arr=np.array(data["t_arr"]),
-        measurements=measurements,
-        dt=float(data["dt"]),
-        nsteps=int(data["nsteps"]),
-        mass_kg=float(data["mass_kg"]),
-        I=np.array(data["I"]),
-    )
+def save_trajectory(traj: dict, filepath: str) -> None:
+    _save(traj, filepath)
 
 
-def save_ekf_result(result: EKFResult, filepath: str) -> None:
-    """Save EKF result to JSON"""
-    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
-    data = {
-        "mu_arr": result.mu_arr,
-        "Sigma_arr": result.Sigma_arr,
-        "t_arr": result.t_arr,
-        "dt": float(result.dt),
-        "nsteps": int(result.nsteps),
-        "mass_kg": float(result.mass_kg),
-        "I": result.I,
-    }
-    with open(filepath, 'w') as f:
-        json.dump(data, f, cls=NumpyEncoder)
+def load_trajectory(filepath: str) -> dict:
+    data = _load(filepath)
+    for key in _TRAJECTORY_ARRAYS:
+        if key in data:
+            data[key] = np.array(data[key])
+    return data
 
 
-def load_ekf_result(filepath: str) -> EKFResult:
-    """Load EKF result from JSON"""
-    with open(filepath, 'r') as f:
-        data = json.load(f)
+def save_sim_result(result: dict, filepath: str) -> None:
+    _save(result, filepath)
 
-    return EKFResult(
-        mu_arr=np.array(data["mu_arr"]),
-        Sigma_arr=np.array(data["Sigma_arr"]),
-        t_arr=np.array(data["t_arr"]),
-        dt=float(data["dt"]),
-        nsteps=int(data["nsteps"]),
-        mass_kg=float(data["mass_kg"]),
-        I=np.array(data["I"]),
-    )
+
+def load_sim_result(filepath: str) -> dict:
+    data = _load(filepath)
+    for key in _SIM_ARRAYS:
+        if key in data:
+            data[key] = np.array(data[key])
+    for sensor_data in data.get("measurements", {}).values():
+        sensor_data["truth"] = np.array(sensor_data["truth"])
+        sensor_data["noisy"] = np.array(sensor_data["noisy"])
+    return data
+
+
+def save_ekf_result(result: dict, filepath: str) -> None:
+    _save(result, filepath)
+
+
+def load_ekf_result(filepath: str) -> dict:
+    data = _load(filepath)
+    for key in _EKF_ARRAYS:
+        if key in data:
+            data[key] = np.array(data[key])
+    return data
