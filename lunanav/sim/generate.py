@@ -5,8 +5,7 @@ from tqdm import tqdm
 
 from .simulator import SimResults, SimParams
 from .sensors import SensorEnvironment, SensorSuite
-from ..constants import GM_MOON, R_MOON
-
+from ..constants import GM_MOON, R_MOON, DEG_TO_RAD
 
 @dataclass
 class SatPosVel:
@@ -105,3 +104,55 @@ def generate_measurements(states: np.ndarray, env_arr: list, sensor_suite: Senso
             measurements_noisy[sensor_name_enum][i] = np.array(z_clean) + noise
 
     return measurements_clean, measurements_noisy
+
+
+######################################################################################################################################################
+#                       For LQR Generation
+######################################################################################################################################################
+
+def aggresive_smoothing(arr: np.ndarray, indices: list):
+
+    o = arr.copy()
+    for i in indices:
+        i1,i2 = i
+        o[i1:i2+1] = np.linspace(arr[i1], arr[i2], i2-i1+1)
+    return o
+
+
+def remove_outliers(data, threshold_std=3, after_index = 0, before_index = -1):
+    result = data.copy()
+    
+    # Detect outliers
+    median = np.median(data, axis=0, keepdims=True)
+    mad = np.median(np.abs(data - median), axis=0, keepdims=True)  # Median Absolute Deviation  "The influence curve and its role in robust estimation"
+    outlier_mask = np.abs(data - median) > threshold_std * mad
+    
+    # Replace outliers with previous value (or neighbor average)
+    for i in np.where(outlier_mask)[0]:
+        if i < after_index:
+            continue
+        if i >= before_index:
+            continue
+        if i == 0:
+            # First point: use next value
+            result[i] = result[i + 1]
+        else:
+            # Use previous value
+            result[i] = result[i - 1]
+    
+    return result
+
+def get_initial_rv_state(altitiude_m: float = 20e3, downrange_angle_deg: float = 3):
+    # 3 uprange in the -Y direction
+    downrange_angle = downrange_angle_deg * DEG_TO_RAD
+    r0_norm = R_MOON + altitiude_m # 20km altitude
+    v0_norm = np.sqrt(GM_MOON / r0_norm) # circular 
+    r0 = r0_norm * np.array([0, -np.sin(downrange_angle), np.cos(downrange_angle)])
+    v0 = v0_norm * np.array([0, np.cos(downrange_angle), np.sin(downrange_angle)])
+
+    s0 = np.array([
+        *r0,
+        *v0,
+        1,0,0,0,0,0,0]) # doesn't matter for this because only r,v
+
+    return s0,r0,v0

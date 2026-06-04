@@ -46,8 +46,9 @@ EKFResult:
 
 import json
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, Field
 from pathlib import Path
+import pickle
 
 
 @dataclass
@@ -107,10 +108,10 @@ def save_trajectory(traj: Trajectory, filepath: str) -> None:
         "torque": traj.torque.tolist(),
     }
     with open(filepath, 'w') as f:
-        json.dump(data, f, indent=4)
+        json.dump(data, f)
 
 
-def load_trajectory(filepath: str) -> Trajectory:
+def load_trajectory(filepath: str) -> tuple[Trajectory, dict]:
     with open(filepath) as f:
         d = json.load(f)
     return Trajectory(
@@ -125,7 +126,7 @@ def load_trajectory(filepath: str) -> Trajectory:
         t=np.array(d["t"]),
         force=np.array(d["force"]),
         torque=np.array(d["torque"]),
-    )
+    ), d
 
 
 def save_sim_result(result: SimResult, filepath: str) -> None:
@@ -146,7 +147,7 @@ def save_sim_result(result: SimResult, filepath: str) -> None:
         },
     }
     with open(filepath, 'w') as f:
-        json.dump(data, f, indent=4)
+        json.dump(data, f)
 
 
 def load_sim_result(filepath: str) -> SimResult:
@@ -183,7 +184,7 @@ def save_ekf_result(result: EKFResult, filepath: str) -> None:
         "I": result.I.tolist(),
     }
     with open(filepath, 'w') as f:
-        json.dump(data, f, indent=4)
+        json.dump(data, f)
 
 
 def load_ekf_result(filepath: str) -> EKFResult:
