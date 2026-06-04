@@ -264,39 +264,68 @@ def visualize_trajectory(
 
     return fig
 
+# def plot_accelerometer(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+#     fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
+#     axes_labels = ['X (Body)', 'Y (Body)', 'Z (Body)']
+#     colors = ['#e74c3c', '#3498db', '#2ecc71']
+
+#     for ax, dim, label, color in zip(axes, range(3), axes_labels, colors):
+#         ax.plot(results.t, measurements_clean[sensor_name.ACCELEROMETER][:, dim], color=color, linewidth=2.5, label='True')
+#         ax.scatter(results.t, measurements_noisy[sensor_name.ACCELEROMETER][:, dim], s=8, alpha=0.4, color=color, label='Noisy')
+#         ax.set_ylabel(f'{label}\n(m/s²)', fontsize=11, fontweight='bold')
+#         ax.grid(True, alpha=0.2, linestyle='--')
+#         ax.legend(loc='upper right', fontsize=9)
+
+#     axes[-1].set_xlabel('Time (s)', fontsize=11)
+#     fig.suptitle('Accelerometer Measurements', fontsize=13, fontweight='bold', y=0.995)
+#     plt.tight_layout()
+#     return fig
+
+
 def plot_accelerometer(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
-    axes_labels = ['X (Body)', 'Y (Body)', 'Z (Body)']
+    fig, ax = plt.subplots(figsize=(14, 3))
+    
+    dim_labels = ['X (Body)', 'Y (Body)', 'Z (Body)']
     colors = ['#e74c3c', '#3498db', '#2ecc71']
-
-    for ax, dim, label, color in zip(axes, range(3), axes_labels, colors):
-        ax.plot(results.t, measurements_clean[sensor_name.ACCELEROMETER][:, dim], color=color, linewidth=2.5, label='True')
-        ax.scatter(results.t, measurements_noisy[sensor_name.ACCELEROMETER][:, dim], s=8, alpha=0.4, color=color, label='Noisy')
-        ax.set_ylabel(f'{label}\n(m/s²)', fontsize=11, fontweight='bold')
-        ax.grid(True, alpha=0.2, linestyle='--')
-        ax.legend(loc='upper right', fontsize=9)
-
-    axes[-1].set_xlabel('Time (s)', fontsize=11)
-    fig.suptitle('Accelerometer Measurements', fontsize=13, fontweight='bold', y=0.995)
-    plt.tight_layout()
+    
+    for dim, label, color in zip(range(3), dim_labels, colors):
+        ax.plot(results.t, measurements_clean[sensor_name.ACCELEROMETER][:, dim], 
+                color=color, linewidth=2.5, label=f'{label} (True)', linestyle='-')
+        ax.scatter(results.t, measurements_noisy[sensor_name.ACCELEROMETER][:, dim], 
+                   s=5, alpha=0.3, color=color, label=f'{label} (Noisy)')
+    
+    ax.set_xlabel('Time (s)', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Acceleration (m/s²)', fontsize=11, fontweight='bold')
+    ax.set_title('Accelerometer Measurements', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    ax.legend(loc='best', fontsize=9, ncol=2)
+    
+    fig.tight_layout()
     return fig
+
 
 def plot_gyroscope(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
-    axes_labels = ['X (Body Roll)', 'Y (Body Pitch)', 'Z (Body Yaw)']
+    fig, ax = plt.subplots(figsize=(14, 3))
+    
+    dim_labels = ['X (Body Roll)', 'Y (Body Pitch)', 'Z (Body Yaw)']
     colors = ['#e74c3c', '#3498db', '#2ecc71']
-
-    for ax, dim, label, color in zip(axes, range(3), axes_labels, colors):
-        ax.plot(results.t, measurements_clean[sensor_name.GYROSCOPE][:, dim], color=color, linewidth=2.5, label='True')
-        ax.scatter(results.t, measurements_noisy[sensor_name.GYROSCOPE][:, dim], s=8, alpha=0.4, color=color, label='Noisy')
-        ax.set_ylabel(f'{label}\n(rad/s)', fontsize=11, fontweight='bold')
-        ax.grid(True, alpha=0.2, linestyle='--')
-        ax.legend(loc='upper right', fontsize=9)
-
-    axes[-1].set_xlabel('Time (s)', fontsize=11)
-    fig.suptitle('Gyroscope Measurements', fontsize=13, fontweight='bold', y=0.995)
-    plt.tight_layout()
+    
+    for dim, label, color in zip(range(3), dim_labels, colors):
+        ax.plot(results.t, measurements_clean[sensor_name.GYROSCOPE][:, dim], 
+                color=color, linewidth=2.5, label=f'{label} (True)', linestyle='-')
+        ax.scatter(results.t, measurements_noisy[sensor_name.GYROSCOPE][:, dim], 
+                   s=5, alpha=0.3, color=color, label=f'{label} (Noisy)')
+    
+    ax.set_xlabel('Time (s)', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Angular Velocity (rad/s)', fontsize=11, fontweight='bold')
+    ax.set_title('Gyroscope Measurements', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    ax.legend(loc='best', fontsize=9, ncol=2)
+    
+    fig.tight_layout()
     return fig
+
+
 
 def plot_laser_altimeter(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
     fig, ax = plt.subplots(figsize=(14, 5))

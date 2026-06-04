@@ -66,46 +66,6 @@ def ekf_predict_state_only(x: jnp.ndarray, a_meas: jnp.ndarray, w_meas: jnp.ndar
     x_next = lander_motion(x_copy, force_B, torque_B, sim.dt, sim.body.mass_kg, sim.body.I)
     return x_next
 
-# def update_sensor(name: SensorName, freq, mu_pred, Sigma_pred, env: SensorEnvironment,
-#                   sensor_suite: SensorSuite, measurements_noisy, i):
-#     """EKF measurement update for one sensor.
-
-#     Always filters NaN rows from the measurement vector so sensors that
-#     return NaN for out-of-range beams or occluded satellites are handled
-#     gracefully without poisoning the state estimate.
-#     """
-#     if freq is None or (i % freq) != 0:
-#         return mu_pred, Sigma_pred
-
-#     # Guard: if state is already corrupt, skip rather than propagate NaN
-#     if jnp.any(jnp.isnan(mu_pred)):
-#         return mu_pred, Sigma_pred
-
-#     sensor = sensor_suite.sensors[name]
-#     meas = measurements_noisy[name][i]
-#     meas_expected = sensor.measure(mu_pred, env)
-#     H = sensor.jacobian(mu_pred, env)
-#     R = sensor.get_noise_cov(env)
-
-#     # Keep only rows where the measurement is valid
-#     valid_mask = ~jnp.isnan(meas)
-#     valid_indices = jnp.where(valid_mask)[0]
-#     if len(valid_indices) == 0:
-#         return mu_pred, Sigma_pred
-
-#     meas_valid         = meas[valid_indices]
-#     meas_expected_valid = meas_expected[valid_indices]
-#     H_valid            = H[valid_indices, :]
-#     R_valid            = R[jnp.ix_(valid_indices, valid_indices)]
-
-#     mu_update, Sigma_update = ekf_update(mu_pred, Sigma_pred, meas_valid, H_valid, meas_expected_valid, R_valid)
-#     return unitize_state(mu_update), Sigma_update
-
-
-# # Keep old name as alias so existing call-sites don't break
-# update_sensor_NaN_check = update_sensor
-
-
 def update_sensor(name: SensorName, freq: int, mu_pred, Sigma_pred, env, sensor_suite: SensorSuite, measurements_noisy, i):
     """Update with a sensor if its update frequency matches current timestep."""
     if freq is None or (i % freq) != 0:

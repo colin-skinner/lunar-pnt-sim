@@ -51,7 +51,7 @@ def make_sat_arrs(t_arr, altitude, raan, aop, inc) -> SatPosVel:
     return SatPosVel(r_arr, v_arr)
 
 
-def generate_env(results: SimResults, sim: SimParams, sats: list = None) -> list:
+def generate_env(results: SimResults, sim: SimParams, sats: list[SatPosVel] = None) -> list:
     """Build a SensorEnvironment for each timestep."""
     n_steps = len(results.t)
     env_arr = []
@@ -74,7 +74,7 @@ def generate_env(results: SimResults, sim: SimParams, sats: list = None) -> list
     return env_arr
 
 
-def generate_measurements(states: np.ndarray, env_arr: list, sensor_suite: SensorSuite):
+def generate_measurements(states: np.ndarray, env_arr: list[SensorEnvironment], sensor_suite: SensorSuite):
     """Generate clean and noisy measurements for all timesteps.
 
     Returns:

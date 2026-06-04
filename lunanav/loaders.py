@@ -72,7 +72,7 @@ class SimResult:
     s_arr: np.ndarray
     force: np.ndarray
     torque: np.ndarray
-    t_arr: np.ndarray
+    t: np.ndarray
     dt: float
     nsteps: int
     mass_kg: float
@@ -136,7 +136,7 @@ def save_sim_result(result: SimResult, filepath: str) -> None:
         "s_arr": result.s_arr.tolist(),
         "force": result.force.tolist(),
         "torque": result.torque.tolist(),
-        "t_arr": result.t_arr.tolist(),
+        "t": result.t.tolist(),
         "dt": result.dt,
         "nsteps": result.nsteps,
         "mass_kg": result.mass_kg,
@@ -162,7 +162,7 @@ def load_sim_result(filepath: str) -> SimResult:
         s_arr=np.array(d["s_arr"]),
         force=np.array(d["force"]),
         torque=np.array(d["torque"]),
-        t_arr=np.array(d["t_arr"]),
+        t=np.array(d["t"]),
         dt=float(d["dt"]),
         nsteps=int(d["nsteps"]),
         mass_kg=float(d["mass_kg"]),
