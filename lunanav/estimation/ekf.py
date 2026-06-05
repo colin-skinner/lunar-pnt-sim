@@ -39,13 +39,34 @@ def ekf_predict(x: jnp.ndarray, P: jnp.ndarray, a_meas: jnp.ndarray, w_meas: jnp
 
     return x_next, P_next
 
-# @jax.jit
+@jax.jit
 def ekf_update(x: jnp.ndarray, P: jnp.ndarray, meas: jnp.ndarray, H: jnp.ndarray, x_expected: jnp.ndarray, R: jnp.ndarray) -> jnp.ndarray:
 
+    
     y = meas - x_expected
     S = H @ P @ H.T + R
+    S_inv = jnp.linalg.pinv(S) # small for weighting meas more
 
-    K = P @ H.T @ jnp.linalg.pinv(S)
+
+    n_meas = len(y)
+    NIS = jnp.array((y @ jnp.linalg.solve(S, y)), float)
+    NIS_per_dim = NIS / n_meas  # should be ~1 for healthy filter
+
+    # Huber scaling: inflate R when NIS is large
+    R_scale = jnp.maximum(1.0, NIS_per_dim / 2.0)
+    R_robust = R * R_scale
+    # Innovation check
+    # Small y, large S --> small NIS --> very noisy
+    # Large y, small S --> large NIS --> not noisy
+    # NIS = y.T @ S_inv @ y
+
+
+    # if any(np.isnan(NIS)):
+    #     breakpoint()
+
+
+
+    K = P @ H.T @ S_inv # large for weighting meas more
 
     x_next = x + K @ y
 
@@ -54,7 +75,7 @@ def ekf_update(x: jnp.ndarray, P: jnp.ndarray, meas: jnp.ndarray, H: jnp.ndarray
     x_next = x_next.at[6:10].set(q)
 
     I = jnp.eye(len(x))
-    P_next = (I - K @ H) @ P @ (I - K @ H).T + K @ R @ K.T
+    P_next = (I - K @ H) @ P @ (I - K @ H).T + K @ R_robust @ K.T
 
     return x_next, P_next
 
@@ -73,17 +94,18 @@ def update_sensor(name: SensorName, freq: int, mu_pred, Sigma_pred, env, sensor_
     
     sensor = sensor_suite.sensors[name]
     meas = measurements_noisy[name][i]
-
     meas_expected = sensor.measure(mu_pred, env)
     H = sensor.jacobian(mu_pred, env)
     R = sensor.get_noise_cov(env)
+
+    
     mu_update, Sigma_update = ekf_update(mu_pred, Sigma_pred, meas, H, meas_expected, R)
     mu_update = unitize_state(mu_update)
     
     return mu_update, Sigma_update
 
 
-def update_sensor_NaN_check(name: SensorName, freq: int, mu_pred, Sigma_pred, env, sensor_suite: SensorSuite, measurements_noisy, i):
+def update_sensor_individual_NaN_check(name: SensorName, freq: int, mu_pred, Sigma_pred, env, sensor_suite: SensorSuite, measurements_noisy, i):
     """Update with a sensor if its update frequency matches current timestep."""
     if freq is None or (i % freq) != 0:
         return mu_pred, Sigma_pred
@@ -94,19 +116,18 @@ def update_sensor_NaN_check(name: SensorName, freq: int, mu_pred, Sigma_pred, en
     H = sensor.jacobian(mu_pred, env)
     R = sensor.get_noise_cov(env)
 
+    # Coupling?
     if name in [SensorName.LASER_ALTIMETER, SensorName.LASER_VELOCITY]:
         H = H.at[:, 6:10].set(0.0)
 
-    # print(f"{meas=}")
-    # print(f"{mu_pred=}")
-    # print(f"{env=}")
-    # print(f"{H=}")
-
     # For NaN
-    valid_mask = ~jnp.isnan(meas)
-    valid_indices = jnp.where(valid_mask)[0]
+    invalid_mask = jnp.isnan(meas) | jnp.isnan(meas_expected);
+
+    valid_indices = jnp.where(~invalid_mask)[0]
     if len(valid_indices) == 0:
         return mu_pred, Sigma_pred
+    
+    
  
     
     # Trunc
@@ -121,9 +142,23 @@ def update_sensor_NaN_check(name: SensorName, freq: int, mu_pred, Sigma_pred, en
     # print("end")
 
 
+
     mu_update, Sigma_update = ekf_update(mu_pred, Sigma_pred, meas_valid, H_valid, meas_expected_valid, R_valid)
     mu_update = unitize_state(mu_update)
 
+    if any(jnp.isnan(mu_update)):
+        # print(sensor)
+        print(f"{mu_pred=}")
+        print(f"{meas=}")
+        print(f"{meas_expected=}")
+        print(f"{H=}")
+        print(f"{R=}")
+        print()
+        print(f"{meas_valid=}")
+        print(f"{meas_expected_valid=}")
+        print(f"{H_valid=}")
+        print(f"{R_valid=}")
+        print()
     return mu_update, Sigma_update
 
 

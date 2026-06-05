@@ -798,3 +798,59 @@ def plot_filter_uncertainty_diag(Sigma_arr, t, figsize=(15, 10), use_variance=Fa
 
     plt.tight_layout()
     return fig
+
+def plot_sensor_config_comparison(results_list, t, dropout_times = None, undropout_times = None):
+    """Plot position, velocity, and attitude errors for all sensor configurations."""
+    fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+    fig.suptitle('EKF Error Comparison Across Sensor Configurations', fontsize=14, fontweight='bold')
+    
+    colors = plt.cm.tab10(np.linspace(0, 1, len(results_list)))
+    
+    for i, result in enumerate(results_list):
+        axs[0].semilogy(t, result['pos_error'], label=result['name'], color=colors[i], linewidth=2,alpha=0.6)
+    axs[0].set_xlabel('Time (s)', fontsize=11)
+    axs[0].set_ylabel('Position Error (m)', fontsize=11)
+    axs[0].set_title('Position Error', fontsize=12, fontweight='bold')
+    axs[0].grid(True, alpha=0.3, which='both')
+    axs[0].legend(fontsize=9, loc='best')
+    
+    for i, result in enumerate(results_list):
+        axs[1].semilogy(t, result['vel_error'], label=result['name'], color=colors[i], linewidth=2,alpha=0.6)
+    axs[1].set_xlabel('Time (s)', fontsize=11)
+    axs[1].set_ylabel('Velocity Error (m/s)', fontsize=11)
+    axs[1].set_title('Velocity Error', fontsize=12, fontweight='bold')
+    axs[1].grid(True, alpha=0.3, which='both')
+    axs[1].legend(fontsize=9, loc='best')
+    
+    for i, result in enumerate(results_list):
+        axs[2].semilogy(t, result['att_error'], label=result['name'], color=colors[i], linewidth=2,alpha=0.6)
+    axs[2].set_xlabel('Time (s)', fontsize=11)
+    axs[2].set_ylabel('Attitude Error', fontsize=11)
+    axs[2].set_title('Attitude Error', fontsize=12, fontweight='bold')
+    axs[2].grid(True, alpha=0.3, which='both')
+    axs[2].legend(fontsize=9, loc='best')
+
+    dropout_times = [] if dropout_times is None else dropout_times
+    undropout_times = [] if undropout_times is None else undropout_times
+    for i in range(3):
+        for t_ in dropout_times:
+            axs[i].axvline(t_, linestyle="-.", color="tab:red", alpha=0.6)
+        for t_ in undropout_times:
+            axs[i].axvline(t_, linestyle="-.", color="tab:green", alpha=0.6)
+    
+    plt.tight_layout()
+    plt.show(block=False)
+    
+    print("\n" + "="*80)
+    print("SENSOR CONFIGURATION COMPARISON - FINAL ERROR METRICS")
+    print("="*80)
+    for result in results_list:
+        pos_final = result['pos_error'][-1]
+        vel_final = result['vel_error'][-1]
+        att_final = result['att_error'][-1]
+        pos_mean = np.mean(result['pos_error'][-100:])
+        vel_mean = np.mean(result['vel_error'][-100:])
+        print(f"\n{result['name']:25s} | {result['description']}")
+        print(f"  Position - Final: {pos_final:8.2f} m  | Mean(last): {pos_mean:8.2f} m")
+        print(f"  Velocity - Final: {vel_final:8.4f} m/s | Mean(last): {vel_mean:8.4f} m/s")
+        print(f"  Attitude - Final: {att_final:8.4f}")

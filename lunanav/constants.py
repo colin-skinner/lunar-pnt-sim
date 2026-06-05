@@ -22,3 +22,6 @@ GM_MOON = 4902.800118e9
 
 R_MOON = 1737.4e3
 """m"""
+
+MOON_3_VEC = lambda x: np.tile([0,0,R_MOON],(x,1))
+MOON_13_VEC = lambda x: np.tile([0,0,R_MOON,0,0,0,0,0,0,0,0,0,0],(x,1))
