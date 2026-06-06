@@ -36,7 +36,7 @@ def get_los_vectors():
     return los_vectors # already calculated when module is imported, so only calculated once
 
 @jax.jit
-def dist_from_los(state, altimeter_bound_m = 100e3, min_dist_inside_moon = 10e3):
+def dist_from_los(state, min_dist_m = 25, max_dist_m = 750e3, min_dist_inside_moon = 10e3):
     """
     Find intersection of LOS rays with lunar sphere.
     LOS ray: r + t * d, where d is LOS direction in inertial frame.
@@ -69,13 +69,34 @@ def dist_from_los(state, altimeter_bound_m = 100e3, min_dist_inside_moon = 10e3)
         distance = jnp.where(r_along_d < 0,    distance,     jnp.nan)
 
         # Max bound
-        distance = jnp.where(LOS_dist <= altimeter_bound_m, distance, jnp.nan)
+        distance = jnp.where(LOS_dist <= max_dist_m, distance, jnp.nan)
+        distance = jnp.where(LOS_dist > min_dist_m, distance, jnp.nan)
 
 
         distances.append(distance)
     
 
     return jnp.array(distances)
+
+# // Intersects ray r = p + td, |d| = 1, with sphere s and, if intersecting,
+# // returns t value of intersection and intersection point q
+# int IntersectRaySphere(Point p, Vector d, Sphere s, float &t, Point &q)
+# {
+# Vectorm=p- s.c;
+# float b = Dot(m, d);
+# float c = Dot(m, m) - s.r * s.r;
+# // Exit if r’s origin outside s (c > 0) and r pointing away from s (b > 0)
+# if (c > 0.0f && b > 0.0f) return 0;
+# float discr = b*b - c;
+# // A negative discriminant corresponds to ray missing sphere
+# if (discr < 0.0f) return 0;
+# // Ray now found to intersect sphere, compute smallest t value of intersection
+# t = -b - Sqrt(discr);
+# // If t is negative, ray started inside sphere so clamp t to zero
+# if (t < 0.0f) t = 0.0f;
+# q = p + t * d;
+# return 1;
+# }
 
 
 # ####################################################################################################
@@ -192,7 +213,7 @@ def laser_altimeter_sensor(noise_std: float) -> Sensor:
     """Laser altimeter: range to lunar surface via LOS."""
     def meas_fn(state: jnp.ndarray, env: SensorEnvironment) -> jnp.ndarray:
         del env
-        return dist_from_los(state)
+        return dist_from_los(state, max_dist_m=100e3)
 
     return Sensor(
         name=SensorName.LASER_ALTIMETER,

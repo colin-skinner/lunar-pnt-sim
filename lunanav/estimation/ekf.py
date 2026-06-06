@@ -4,6 +4,7 @@ from typing import Callable
 from scipy.linalg import block_diag
 import jax.numpy as jnp
 import jax
+import pdb
 
 from ..sim.simulator import rigid_body_derivative, lander_motion
 from ..sim.simulator import SimParams
@@ -49,20 +50,29 @@ def ekf_update(x: jnp.ndarray, P: jnp.ndarray, meas: jnp.ndarray, H: jnp.ndarray
 
 
     n_meas = len(y)
-    NIS = jnp.array((y @ jnp.linalg.solve(S, y)), float)
+    NIS = y @ jnp.linalg.solve(S, y)  # already a scalar, no need for jnp.array(..., float)
     NIS_per_dim = NIS / n_meas  # should be ~1 for healthy filter
 
     # Huber scaling: inflate R when NIS is large
-    R_scale = jnp.maximum(1.0, NIS_per_dim / 2.0)
-    R_robust = R * R_scale
+    k = 3
+    R_scale = jnp.maximum(1.0, jnp.sqrt(NIS_per_dim) / k)
+    R_robust = R * R_scale**2
+
+    # n_meas = len(y)
+    # NIS = jnp.array((y @ jnp.linalg.solve(S, y)), float)
+    # NIS_per_dim = NIS / n_meas  # should be ~1 for healthy filter
+
+    # # Huber scaling: inflate R when NIS is large
+    # R_scale = jnp.maximum(1.0, NIS_per_dim / 2.0)
+    # R_robust = R * R_scale
     # Innovation check
     # Small y, large S --> small NIS --> very noisy
     # Large y, small S --> large NIS --> not noisy
     # NIS = y.T @ S_inv @ y
 
 
-    if any(np.isnan(NIS)):
-        breakpoint()
+    # if any(np.isnan(NIS)):
+    #     breakpoint()
 
 
 
@@ -101,7 +111,17 @@ def update_sensor(name: SensorName, freq: int, mu_pred, Sigma_pred, env, sensor_
     
     mu_update, Sigma_update = ekf_update(mu_pred, Sigma_pred, meas, H, meas_expected, R)
     mu_update = unitize_state(mu_update)
-    
+    if any(jnp.isnan(mu_update)):
+        # print(sensor)
+        print(f"{name=}")
+        print(f"{mu_pred=}")
+        print(f"{mu_update=}")
+        print(f"{meas=}")
+        print(f"{meas_expected=}")
+        print(f"{H=}")
+        print(f"{R=}")
+        print()
+        # pdb.set_trace()
     return mu_update, Sigma_update
 
 
@@ -121,7 +141,7 @@ def update_sensor_individual_NaN_check(name: SensorName, freq: int, mu_pred, Sig
         H = H.at[:, 6:10].set(0.0)
 
     # For NaN
-    invalid_mask = jnp.isnan(meas) | jnp.isnan(meas_expected);
+    invalid_mask = jnp.isnan(meas) | jnp.isnan(meas_expected)
 
     valid_indices = jnp.where(~invalid_mask)[0]
     if len(valid_indices) == 0:
@@ -159,6 +179,7 @@ def update_sensor_individual_NaN_check(name: SensorName, freq: int, mu_pred, Sig
         print(f"{H_valid=}")
         print(f"{R_valid=}")
         print()
+        # pdb.set_trace()
     return mu_update, Sigma_update
 
 
