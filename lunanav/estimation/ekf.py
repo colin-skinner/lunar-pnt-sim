@@ -5,7 +5,7 @@ from scipy.linalg import block_diag
 import jax.numpy as jnp
 import jax
 
-from ..sim.simulator import rigid_body_derivative, lander_motion, linearized_lander_motion
+from ..sim.simulator import rigid_body_derivative, lander_motion
 from ..sim.simulator import SimParams
 from ..sim.sensors import SensorName, SensorSuite, SensorEnvironment
 from ..sim.quaternion import unitize_state
@@ -61,8 +61,8 @@ def ekf_update(x: jnp.ndarray, P: jnp.ndarray, meas: jnp.ndarray, H: jnp.ndarray
     # NIS = y.T @ S_inv @ y
 
 
-    # if any(np.isnan(NIS)):
-    #     breakpoint()
+    if any(np.isnan(NIS)):
+        breakpoint()
 
 
 

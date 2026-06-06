@@ -799,7 +799,7 @@ def plot_filter_uncertainty_diag(Sigma_arr, t, figsize=(15, 10), use_variance=Fa
     plt.tight_layout()
     return fig
 
-def plot_sensor_config_comparison(results_list, t, dropout_times = None, undropout_times = None):
+def plot_sensor_config_comparison(results_list, t, dropout_times = None, undropout_times = None, alpha = 1):
     """Plot position, velocity, and attitude errors for all sensor configurations."""
     fig, axs = plt.subplots(1, 3, figsize=(18, 5))
     fig.suptitle('EKF Error Comparison Across Sensor Configurations', fontsize=14, fontweight='bold')
@@ -807,7 +807,7 @@ def plot_sensor_config_comparison(results_list, t, dropout_times = None, undropo
     colors = plt.cm.tab10(np.linspace(0, 1, len(results_list)))
     
     for i, result in enumerate(results_list):
-        axs[0].semilogy(t, result['pos_error'], label=result['name'], color=colors[i], linewidth=2,alpha=0.6)
+        axs[0].semilogy(t, result['pos_error'], label=result['name'], color=colors[i], linewidth=2,alpha=alpha)
     axs[0].set_xlabel('Time (s)', fontsize=11)
     axs[0].set_ylabel('Position Error (m)', fontsize=11)
     axs[0].set_title('Position Error', fontsize=12, fontweight='bold')
@@ -815,7 +815,7 @@ def plot_sensor_config_comparison(results_list, t, dropout_times = None, undropo
     axs[0].legend(fontsize=9, loc='best')
     
     for i, result in enumerate(results_list):
-        axs[1].semilogy(t, result['vel_error'], label=result['name'], color=colors[i], linewidth=2,alpha=0.6)
+        axs[1].semilogy(t, result['vel_error'], label=result['name'], color=colors[i], linewidth=2,alpha=alpha)
     axs[1].set_xlabel('Time (s)', fontsize=11)
     axs[1].set_ylabel('Velocity Error (m/s)', fontsize=11)
     axs[1].set_title('Velocity Error', fontsize=12, fontweight='bold')
@@ -823,7 +823,7 @@ def plot_sensor_config_comparison(results_list, t, dropout_times = None, undropo
     axs[1].legend(fontsize=9, loc='best')
     
     for i, result in enumerate(results_list):
-        axs[2].semilogy(t, result['att_error'], label=result['name'], color=colors[i], linewidth=2,alpha=0.6)
+        axs[2].semilogy(t, result['att_error'], label=result['name'], color=colors[i], linewidth=2,alpha=alpha)
     axs[2].set_xlabel('Time (s)', fontsize=11)
     axs[2].set_ylabel('Attitude Error', fontsize=11)
     axs[2].set_title('Attitude Error', fontsize=12, fontweight='bold')

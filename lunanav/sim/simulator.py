@@ -222,11 +222,6 @@ def lander_motion(state: jnp.ndarray, force_B: jnp.ndarray, torque_B: jnp.ndarra
 
     return next_state
 
-def linearized_lander_motion(state: jnp.ndarray, force_B: jnp.ndarray, torque_B: jnp.ndarray,
-                          dt: float, mass: float, I: jnp.ndarray):
-    """Linearize propagation under gravity around a state and BODY input."""
-    return jax.jacfwd(lambda s, f, tau: lander_motion(s, f, tau, dt, mass, I))(state, force_B, torque_B)
-
 def run_sim(state0, nsteps, dt, control_fn, params: SimParams):
     """Run the simulation forward in time.
 
