@@ -9,7 +9,7 @@ from scipy import stats
 
 from ..sim.simulator import rigid_body_derivative, lander_motion
 from ..sim.simulator import SimParams
-from ..sim.sensors import SensorName, SensorSuite, SensorEnvironment
+from ..sim.sensors import SensorSuite, SensorEnvironment
 from ..sim.quaternion import unitize_state
 
 
@@ -79,7 +79,6 @@ def ekf_update(x: jnp.ndarray, P: jnp.ndarray, meas: jnp.ndarray, H: jnp.ndarray
     # Chi-squared test: expected value is measurement_dim
     measurement_dim = R.shape[0]
     chi2_alpha = stats.chi2.ppf(0.99, df=measurement_dim)  # 95th percentile
-    chi2_50 = stats.chi2.ppf(0.5, df=measurement_dim)  # ~median = n_z
     
     # Adapt R based on chi-squared consistency
     NIS_per_dim = NIS / n_meas
@@ -132,7 +131,7 @@ def ekf_predict_state_only(x: jnp.ndarray, a_meas: jnp.ndarray, w_meas: jnp.ndar
     x_next = lander_motion(x_copy, force_B, torque_B, sim.dt, sim.body.mass_kg, sim.body.I)
     return x_next
 
-def update_sensor(name: SensorName, freq: int, mu_pred, Sigma_pred, env, sensor_suite: SensorSuite, measurements_noisy, i):
+def update_sensor(name: str, freq: int, mu_pred, Sigma_pred, env, sensor_suite: SensorSuite, measurements_noisy, i):
     """Update with a sensor if its update frequency matches current timestep."""
     if freq is None or (i % freq) != 0:
         return mu_pred, Sigma_pred
@@ -160,7 +159,7 @@ def update_sensor(name: SensorName, freq: int, mu_pred, Sigma_pred, env, sensor_
     return mu_update, Sigma_update
 
 
-def update_sensor_individual_NaN_check(name: SensorName, freq: int, mu_pred, Sigma_pred, env, sensor_suite: SensorSuite, measurements_noisy, i):
+def update_sensor_individual_NaN_check(name: str, freq: int, mu_pred, Sigma_pred, env, sensor_suite: SensorSuite, measurements_noisy, i):
     """Update with a sensor if its update frequency matches current timestep."""
     if freq is None or (i % freq) != 0:
         return mu_pred, Sigma_pred
@@ -172,7 +171,7 @@ def update_sensor_individual_NaN_check(name: SensorName, freq: int, mu_pred, Sig
     R = sensor.get_noise_cov(env)
 
     # Coupling?
-    if name in [SensorName.LASER_ALTIMETER, SensorName.LASER_VELOCITY]:
+    if name in ["laser_altimeter", "laser_velocity"]:
         H = H.at[:, 6:10].set(0.0)
 
     # For NaN

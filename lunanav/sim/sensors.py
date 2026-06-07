@@ -10,15 +10,15 @@ from .quaternion import quat_apply, angle_axis_to_q, hamilton_product, unit, con
 from ..constants import R_MOON
 
 
-class SensorName(Enum):
-    """Enumeration of sensor types for type-safe references."""
-    ACCELEROMETER = "accelerometer"
-    GYROSCOPE = "gyroscope"
-    LASER_ALTIMETER = "laser_altimeter"
-    LASER_VELOCITY = "laser_velocity"
-    STAR_TRACKER = "star_tracker"
-    DOPPLER = "doppler"
-    RANGE_TRACKER = "range_tracker"
+# class SensorName(Enum):
+#     """Enumeration of sensor types for type-safe references."""
+#     ACCELEROMETER = "accelerometer"
+#     GYROSCOPE = "gyroscope"
+#     LASER_ALTIMETER = "laser_altimeter"
+#     LASER_VELOCITY = "laser_velocity"
+#     STAR_TRACKER = "star_tracker"
+#     DOPPLER = "doppler"
+#     RANGE_TRACKER = "range_tracker"
 
 # ####################################################################################################
 # #                                       Line-of-sight Distance
@@ -36,7 +36,7 @@ def get_los_vectors():
     return los_vectors # already calculated when module is imported, so only calculated once
 
 @jax.jit
-def dist_from_los(state, min_dist_m = 25, max_dist_m = 100e3, min_dist_inside_moon = 10e3):
+def dist_from_los(state, max_dist_m = 100e3, min_dist_m = 25,  min_dist_inside_moon = 10e3):
     """
     Find intersection of LOS rays with lunar sphere.
     LOS ray: r + t * d, where d is LOS direction in inertial frame.
@@ -78,6 +78,41 @@ def dist_from_los(state, min_dist_m = 25, max_dist_m = 100e3, min_dist_inside_mo
 
     return jnp.array(distances)
 
+@jax.jit
+def dist_from_los_clean(state, min_dist_m = 25, max_dist_m = 100e3, min_dist_inside_moon = 10e3):
+    """
+    Find intersection of LOS rays with lunar sphere.
+    LOS ray: r + t * d, where d is LOS direction in inertial frame.
+    Sphere: |x| = R_MOON.
+    
+    Solve: |r + t*d|^2 = R_MOON^2
+    Quadratic in t: t^2 + 2*(r·d)*t + |r|^2 - R_MOON^2 = 0
+    """
+    r, q_B2L = state[0:3], state[6:10]
+    r_norm = norm(r)
+    vecs_body = get_los_vectors()
+    distances = []
+
+    for v in vecs_body:
+        d = quat_apply(q_B2L, v)
+        d = unit(d)
+        r_along_d = jnp.dot(r,d) / norm(d) # negative if "opposite direction"
+        cos_angle = r_along_d / r_norm
+        sin_angle = jnp.sqrt(1 - cos_angle**2)
+        r_perp_d = r_norm * sin_angle
+
+        dist_inside_moon_2 = R_MOON**2 - r_perp_d**2
+
+        LOS_dist = abs(r_along_d) - jnp.sqrt(dist_inside_moon_2)
+
+        # Apply validity checks with 0.0 in false branches
+        distance = jnp.where(dist_inside_moon_2 > min_dist_inside_moon**2, LOS_dist, 0.0)
+        distance = jnp.where(r_along_d < 0.0, distance, 0.0)
+        distance = jnp.where((LOS_dist > min_dist_m) & (LOS_dist <= max_dist_m), distance, 0.0)
+
+        distances.append(distance)
+
+    return jnp.array(distances)
 # // Intersects ray r = p + td, |d| = 1, with sphere s and, if intersecting,
 # // returns t value of intersection and intersection point q
 # int IntersectRaySphere(Point p, Vector d, Sphere s, float &t, Point &q)
@@ -104,7 +139,7 @@ def dist_from_los(state, min_dist_m = 25, max_dist_m = 100e3, min_dist_inside_mo
 # ####################################################################################################
 
 @jax.jit
-def dist_rate_from_los(state: jnp.ndarray, max_dist_m: float = 1e3) -> jnp.ndarray:
+def dist_rate_from_los(state: jnp.ndarray, max_dist_m: float = 100e3) -> jnp.ndarray:
     """Compute range-rate (time derivative of distance) via chain rule."""
     r, v, q, w = state[0:3], state[3:6], state[6:10], state[10:13]
 
@@ -156,7 +191,7 @@ class Sensor:
     Sensor abstraction that encapsulates measurement function, noise, and Jacobian.
     measurement_fn and noise_cov can depend on SensorEnvironment for time-varying data.
     """
-    name: SensorName
+    name: str
     measurement_fn: Callable[[jnp.ndarray, "SensorEnvironment"], jnp.ndarray]
     noise_cov: jnp.ndarray | Callable[["SensorEnvironment"], jnp.ndarray]
     meas_dim: int
@@ -189,7 +224,7 @@ def accelerometer_sensor(noise_std: float) -> Sensor:
         return env.specific_force_body / env.mass
 
     return Sensor(
-        name=SensorName.ACCELEROMETER,
+        name="accelerometer",
         measurement_fn=meas_fn,
         noise_cov=jnp.eye(3) * (noise_std ** 2),
         meas_dim=3
@@ -203,7 +238,7 @@ def gyroscope_sensor(noise_std: float) -> Sensor:
         return state[10:13]
 
     return Sensor(
-        name=SensorName.GYROSCOPE,
+        name="gyroscope",
         measurement_fn=meas_fn,
         noise_cov=jnp.eye(3) * (noise_std ** 2),
         meas_dim=3
@@ -217,7 +252,7 @@ def laser_altimeter_sensor(noise_std: float) -> Sensor:
         return dist_from_los(state, max_dist_m=100e3)
 
     return Sensor(
-        name=SensorName.LASER_ALTIMETER,
+        name="laser_altimeter",
         measurement_fn=meas_fn,
         noise_cov=jnp.eye(4) * (noise_std ** 2),
         meas_dim=4
@@ -231,7 +266,7 @@ def laser_velocity_sensor(noise_std: float) -> Sensor:
         return dist_rate_from_los(state, max_dist_m=100e3)
 
     return Sensor(
-        name=SensorName.LASER_VELOCITY,
+        name="laser_velocity",
         measurement_fn=meas_fn,
         noise_cov=jnp.eye(4) * (noise_std ** 2),
         meas_dim=4
@@ -246,7 +281,7 @@ def star_tracker_sensor(noise_std: float) -> Sensor:
         return unit(q_B2L)
 
     return Sensor(
-        name=SensorName.STAR_TRACKER,
+        name="star_tracker",
         measurement_fn=meas_fn,
         noise_cov=jnp.eye(4) * (noise_std ** 2),
         meas_dim=4
@@ -286,7 +321,7 @@ def doppler_sensor(n_sats: int, noise_std: float) -> Sensor:
         return jnp.array(measurements)
 
     return Sensor(
-        name=SensorName.DOPPLER,
+        name="doppler",
         measurement_fn=meas_fn,
         noise_cov=jnp.eye(n_sats) * (noise_std ** 2),
         meas_dim=n_sats
@@ -306,7 +341,7 @@ def sat_range_tracker_sensor(n_sats: int, noise_std: float) -> Sensor:
         return jnp.array(measurements)
     
     return Sensor(
-        name=SensorName.RANGE_TRACKER,
+        name="range_tracker",
         measurement_fn=meas_fn,
         noise_cov=jnp.eye(n_sats) * (noise_std ** 2),
         meas_dim=n_sats
