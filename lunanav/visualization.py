@@ -282,17 +282,17 @@ def visualize_trajectory(
 #     return fig
 
 
-def plot_accelerometer(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+def plot_accelerometer(measurements_clean, measurements_noisy, results):
     fig, ax = plt.subplots(figsize=(14, 3))
     
     dim_labels = ['X (Body)', 'Y (Body)', 'Z (Body)']
     colors = ['#e74c3c', '#3498db', '#2ecc71']
     
     for dim, label, color in zip(range(3), dim_labels, colors):
-        ax.plot(results.t, measurements_clean[sensor_name.ACCELEROMETER][:, dim], 
-                color=color, linewidth=2.5, label=f'{label} (True)', linestyle='-')
-        ax.scatter(results.t, measurements_noisy[sensor_name.ACCELEROMETER][:, dim], 
-                   s=5, alpha=0.3, color=color, label=f'{label} (Noisy)')
+        ax.plot(results.t, measurements_clean[SensorName.ACCELEROMETER][:, dim], 
+                color=color, linewidth=2.5, label=f'{label}', linestyle='-')
+        ax.scatter(results.t, measurements_noisy[SensorName.ACCELEROMETER][:, dim], 
+                   s=5, alpha=0.3, color=color)
     
     ax.set_xlabel('Time (s)', fontsize=11, fontweight='bold')
     ax.set_ylabel('Acceleration (m/s²)', fontsize=11, fontweight='bold')
@@ -304,17 +304,17 @@ def plot_accelerometer(measurements_clean, measurements_noisy, results, sensor_n
     return fig
 
 
-def plot_gyroscope(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+def plot_gyroscope(measurements_clean, measurements_noisy, results):
     fig, ax = plt.subplots(figsize=(14, 3))
     
     dim_labels = ['X (Body Roll)', 'Y (Body Pitch)', 'Z (Body Yaw)']
     colors = ['#e74c3c', '#3498db', '#2ecc71']
     
     for dim, label, color in zip(range(3), dim_labels, colors):
-        ax.plot(results.t, measurements_clean[sensor_name.GYROSCOPE][:, dim], 
-                color=color, linewidth=2.5, label=f'{label} (True)', linestyle='-')
-        ax.scatter(results.t, measurements_noisy[sensor_name.GYROSCOPE][:, dim], 
-                   s=5, alpha=0.3, color=color, label=f'{label} (Noisy)')
+        ax.plot(results.t, measurements_clean[SensorName.GYROSCOPE][:, dim], 
+                color=color, linewidth=2.5, label=f'{label}', linestyle='-')
+        ax.scatter(results.t, measurements_noisy[SensorName.GYROSCOPE][:, dim], 
+                   s=5, alpha=0.3, color=color)
     
     ax.set_xlabel('Time (s)', fontsize=11, fontweight='bold')
     ax.set_ylabel('Angular Velocity (rad/s)', fontsize=11, fontweight='bold')
@@ -327,14 +327,14 @@ def plot_gyroscope(measurements_clean, measurements_noisy, results, sensor_name:
 
 
 
-def plot_laser_altimeter(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+def plot_laser_altimeter(measurements_clean, measurements_noisy, results):
     fig, ax = plt.subplots(figsize=(14, 5))
     colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12']
 
     for beam in range(4):
-        ax.plot(results.t, measurements_clean[sensor_name.LASER_ALTIMETER][:, beam],
+        ax.plot(results.t, measurements_clean[SensorName.LASER_ALTIMETER][:, beam],
                 color=colors[beam], linewidth=2.5, label=f'Beam {beam} (clean)', alpha=0.9)
-        ax.scatter(results.t, measurements_noisy[sensor_name.LASER_ALTIMETER][:, beam],
+        ax.scatter(results.t, measurements_noisy[SensorName.LASER_ALTIMETER][:, beam],
                   s=5, alpha=0.15, color=colors[beam])
 
     ax.set_xlabel('Time (s)', fontsize=11)
@@ -345,14 +345,14 @@ def plot_laser_altimeter(measurements_clean, measurements_noisy, results, sensor
     plt.tight_layout()
     return fig
 
-def plot_laser_velocity(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+def plot_laser_velocity(measurements_clean, measurements_noisy, results):
     fig, ax = plt.subplots(figsize=(14, 5))
     colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12']
 
     for beam in range(4):
-        ax.plot(results.t, measurements_clean[sensor_name.LASER_VELOCITY][:, beam],
+        ax.plot(results.t, measurements_clean[SensorName.LASER_VELOCITY][:, beam],
                 color=colors[beam], linewidth=2.5, label=f'Beam {beam} (clean)', alpha=0.9)
-        ax.scatter(results.t, measurements_noisy[sensor_name.LASER_VELOCITY][:, beam],
+        ax.scatter(results.t, measurements_noisy[SensorName.LASER_VELOCITY][:, beam],
                   s=5, alpha=0.15, color=colors[beam])
 
     ax.set_xlabel('Time (s)', fontsize=11)
@@ -364,15 +364,15 @@ def plot_laser_velocity(measurements_clean, measurements_noisy, results, sensor_
     plt.tight_layout()
     return fig
 
-def plot_star_tracker(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+def plot_star_tracker(measurements_clean, measurements_noisy, results):
     fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
     labels = ['q0 (scalar)', 'q1 (x)', 'q2 (y)', 'q3 (z)']
     colors = ['#9b59b6', '#e74c3c', '#3498db', '#2ecc71']
 
     for ax, dim, label, color in zip(axes, range(4), labels, colors):
-        ax.plot(results.t, measurements_clean[sensor_name.STAR_TRACKER][:, dim],
+        ax.plot(results.t, measurements_clean[SensorName.STAR_TRACKER][:, dim],
                 color=color, linewidth=2.5, label='True')
-        ax.scatter(results.t, measurements_noisy[sensor_name.STAR_TRACKER][:, dim],
+        ax.scatter(results.t, measurements_noisy[SensorName.STAR_TRACKER][:, dim],
                   s=8, alpha=0.3, color=color, label='Noisy')
         ax.set_ylabel(label, fontsize=11, fontweight='bold')
         ax.grid(True, alpha=0.2, linestyle='--')
@@ -384,15 +384,15 @@ def plot_star_tracker(measurements_clean, measurements_noisy, results, sensor_na
     plt.tight_layout()
     return fig
 
-def plot_doppler(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+def plot_doppler(measurements_clean, measurements_noisy, results):
     fig, ax = plt.subplots(figsize=(14, 5))
-    n_sats = measurements_clean[sensor_name.DOPPLER].shape[1]
+    n_sats = measurements_clean[SensorName.DOPPLER].shape[1]
     colors = plt.cm.tab10(np.linspace(0, 1, n_sats))
 
     for sat in range(n_sats):
-        ax.plot(results.t, measurements_clean[sensor_name.DOPPLER][:, sat],
+        ax.plot(results.t, measurements_clean[SensorName.DOPPLER][:, sat],
                 color=colors[sat], linewidth=2.5, label=f'Sat {sat} (clean)', alpha=0.9)
-        ax.scatter(results.t, measurements_noisy[sensor_name.DOPPLER][:, sat],
+        ax.scatter(results.t, measurements_noisy[SensorName.DOPPLER][:, sat],
                   s=5, alpha=0.15, color=colors[sat])
 
     ax.set_xlabel('Time (s)', fontsize=11)
@@ -404,15 +404,15 @@ def plot_doppler(measurements_clean, measurements_noisy, results, sensor_name: S
     plt.tight_layout()
     return fig
 
-def plot_range_tracker(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+def plot_range_tracker(measurements_clean, measurements_noisy, results):
     fig, ax = plt.subplots(figsize=(14, 5))
-    n_sats = measurements_clean[sensor_name.RANGE_TRACKER].shape[1]
+    n_sats = measurements_clean[SensorName.RANGE_TRACKER].shape[1]
     colors = plt.cm.tab10(np.linspace(0, 1, n_sats))
 
     for sat in range(n_sats):
-        ax.plot(results.t, measurements_clean[sensor_name.RANGE_TRACKER][:, sat],
+        ax.plot(results.t, measurements_clean[SensorName.RANGE_TRACKER][:, sat],
                 color=colors[sat], linewidth=2.5, label=f'Sat {sat} (clean)', alpha=0.9)
-        ax.scatter(results.t, measurements_noisy[sensor_name.RANGE_TRACKER][:, sat],
+        ax.scatter(results.t, measurements_noisy[SensorName.RANGE_TRACKER][:, sat],
                   s=5, alpha=0.15, color=colors[sat])
 
     ax.set_xlabel('Time (s)', fontsize=11)
@@ -438,7 +438,7 @@ def plot_measurements(measurements_clean, measurements_noisy, results, sensor_su
     figs = []
     for sensor_name, plotter in plotters.items():
         if sensor_name in sensor_suite.sensors:
-            fig = plotter(measurements_clean, measurements_noisy, results, sensor_name)
+            fig = plotter(measurements_clean, measurements_noisy, results)
             figs.append(fig)
             plt.show()
     
@@ -839,7 +839,6 @@ def plot_sensor_config_comparison(results_list, t, dropout_times = None, undropo
             axs[i].axvline(t_, linestyle="-.", color="tab:green", alpha=0.6)
     
     plt.tight_layout()
-    plt.show(block=False)
     
     print("\n" + "="*80)
     print("SENSOR CONFIGURATION COMPARISON - FINAL ERROR METRICS")
@@ -854,3 +853,5 @@ def plot_sensor_config_comparison(results_list, t, dropout_times = None, undropo
         print(f"  Position - Final: {pos_final:8.2f} m  | Mean(last): {pos_mean:8.2f} m")
         print(f"  Velocity - Final: {vel_final:8.4f} m/s | Mean(last): {vel_mean:8.4f} m/s")
         print(f"  Attitude - Final: {att_final:8.4f}")
+
+    return fig

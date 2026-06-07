@@ -36,7 +36,7 @@ def get_los_vectors():
     return los_vectors # already calculated when module is imported, so only calculated once
 
 @jax.jit
-def dist_from_los(state, min_dist_m = 25, max_dist_m = 750e3, min_dist_inside_moon = 10e3):
+def dist_from_los(state, min_dist_m = 25, max_dist_m = 100e3, min_dist_inside_moon = 10e3):
     """
     Find intersection of LOS rays with lunar sphere.
     LOS ray: r + t * d, where d is LOS direction in inertial frame.
@@ -104,20 +104,21 @@ def dist_from_los(state, min_dist_m = 25, max_dist_m = 750e3, min_dist_inside_mo
 # ####################################################################################################
 
 @jax.jit
-def dist_rate_from_los(state: jnp.ndarray) -> jnp.ndarray:
+def dist_rate_from_los(state: jnp.ndarray, max_dist_m: float = 1e3) -> jnp.ndarray:
     """Compute range-rate (time derivative of distance) via chain rule."""
     r, v, q, w = state[0:3], state[3:6], state[6:10], state[10:13]
 
-    mask = jnp.isnan(dist_from_los(state))
+    mask = jnp.isnan(dist_from_los(state, max_dist_m))
+    
 
     def dist_wrt_r(r_val: jnp.ndarray) -> jnp.ndarray:
-        return dist_from_los(jnp.concatenate([r_val, v, q, w]))
+        return dist_from_los(jnp.concatenate([r_val, v, q, w]), max_dist_m)
 
     def dist_wrt_q(q_val: jnp.ndarray) -> jnp.ndarray:
-        return dist_from_los(jnp.concatenate([r, v, q_val, w]))
+        return dist_from_los(jnp.concatenate([r, v, q_val, w]), max_dist_m)
 
-    dD_dr = jax.jit(jax.jacfwd(dist_wrt_r))(r)  # (4, 3)
-    dD_dq = jax.jit(jax.jacfwd(dist_wrt_q))(q)  # (4, 4)
+    dD_dr = jax.jacfwd(dist_wrt_r)(r)  # (4, 3)
+    dD_dq = jax.jacfwd(dist_wrt_q)(q)  # (4, 4)
 
     drdt = v
     dqdt = 0.5 * hamilton_product(q, w)
@@ -227,7 +228,7 @@ def laser_velocity_sensor(noise_std: float) -> Sensor:
     """Laser velocity: range-rate via LOS."""
     def meas_fn(state: jnp.ndarray, env: SensorEnvironment) -> jnp.ndarray:
         del env
-        return dist_rate_from_los(state)
+        return dist_rate_from_los(state, max_dist_m=100e3)
 
     return Sensor(
         name=SensorName.LASER_VELOCITY,

@@ -5,6 +5,7 @@ from scipy.linalg import block_diag
 import jax.numpy as jnp
 import jax
 import pdb
+from scipy import stats
 
 from ..sim.simulator import rigid_body_derivative, lander_motion
 from ..sim.simulator import SimParams
@@ -50,13 +51,17 @@ def ekf_update(x: jnp.ndarray, P: jnp.ndarray, meas: jnp.ndarray, H: jnp.ndarray
 
 
     n_meas = len(y)
-    NIS = y @ jnp.linalg.solve(S, y)  # already a scalar, no need for jnp.array(..., float)
-    NIS_per_dim = NIS / n_meas  # should be ~1 for healthy filter
+    NIS = y @ jnp.linalg.solve(S, y) # can do this because S*(S\y) = y and we want S\y
+    # NIS_per_dim = 
 
-    # Huber scaling: inflate R when NIS is large
-    k = 3
-    R_scale = jnp.maximum(1.0, jnp.sqrt(NIS_per_dim) / k)
-    R_robust = R * R_scale**2
+    # k = 3 # bound for when the sqrt kicks in (in units of meas)
+    # R_scale = jnp.maximum(1.0, jnp.sqrt(NIS_per_dim) / k)
+    # R_adapted = R * R_scale**2
+
+    # k = 3 # bound for when the sqrt kicks in (in units of meas)
+    # R_scale = jnp.maximum(1.0, NIS_per_dim / k**2) # now units of sigma^2
+    # R_robust = R * R_scale
+
 
     # n_meas = len(y)
     # NIS = jnp.array((y @ jnp.linalg.solve(S, y)), float)
@@ -71,9 +76,39 @@ def ekf_update(x: jnp.ndarray, P: jnp.ndarray, meas: jnp.ndarray, H: jnp.ndarray
     # NIS = y.T @ S_inv @ y
 
 
+    # Chi-squared test: expected value is measurement_dim
+    measurement_dim = R.shape[0]
+    chi2_alpha = stats.chi2.ppf(0.99, df=measurement_dim)  # 95th percentile
+    chi2_50 = stats.chi2.ppf(0.5, df=measurement_dim)  # ~median = n_z
+    
+    # Adapt R based on chi-squared consistency
+    NIS_per_dim = NIS / n_meas
+    R_adapted = jnp.where(
+        NIS_per_dim > chi2_alpha,
+        R * NIS_per_dim / chi2_alpha,
+        R
+    )
+
+
+
+    # if NIS > chi2_alpha:
+    #     # Innovation too large → scale up R (less trust measurements)
+    #     scale_factor = NIS / chi2_expected
+    #     R_adapted = R * scale_factor
+    #     # trust_level = "LOW"
+    # elif NIS < stats.chi2.ppf(0.05, df=measurement_dim):  # 5th percentile
+    #     # Innovation too small → Q might be too large or R too small
+    #     # Less common to adapt R downward; usually indicates Q tuning issue
+    #     R_adapted = R
+    #     # trust_level = "NOMINAL (Q check needed)"
+    # else:
+    #     # Innovation within expected bounds
+    #     R_adapted = R
+    #     # trust_level = "HEALTHY"
+
+
     # if any(np.isnan(NIS)):
     #     breakpoint()
-
 
 
     K = P @ H.T @ S_inv # large for weighting meas more
@@ -85,7 +120,7 @@ def ekf_update(x: jnp.ndarray, P: jnp.ndarray, meas: jnp.ndarray, H: jnp.ndarray
     x_next = x_next.at[6:10].set(q)
 
     I = jnp.eye(len(x))
-    P_next = (I - K @ H) @ P @ (I - K @ H).T + K @ R_robust @ K.T
+    P_next = (I - K @ H) @ P @ (I - K @ H).T + K @ R_adapted @ K.T
 
     return x_next, P_next
 
