@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from numpy.linalg import svd
+from pathlib import Path
 import jax
 import jax.numpy as jnp
 from .sim.quaternion import quat_apply, unitize_state
@@ -864,3 +865,127 @@ def plot_sensor_config_comparison(results_list, t, dropout_times = None, undropo
         print(f"  Attitude - Final: {att_final:8.4f}")
 
     return fig
+def analyze_ekf_error(results, mu_arr, t_arr, case_name="EKF Performance", save_path=None):
+    """
+    Streamlined EKF error analysis: position, velocity, attitude, angular rate.
+    
+    Args:
+        results: SimResults object with .states, .t
+        mu_arr: [N, 13] array of state estimates from EKF
+        t_arr: [N] time array
+        case_name: str for figure title
+        save_path: optional path to save figure
+    
+    Returns:
+        fig: matplotlib figure
+        stats: dict with error metrics
+    """
+    
+    # Component-wise errors
+    vel_error_x = mu_arr[:, 3] - results.states[:, 3]
+    vel_error_y = mu_arr[:, 4] - results.states[:, 4]
+    vel_error_z = mu_arr[:, 5] - results.states[:, 5]
+    
+    pos_norms = np.linalg.norm(mu_arr[:, 0:3] - results.states[:, 0:3], axis=1)
+    vel_norms = np.linalg.norm(mu_arr[:, 3:6] - results.states[:, 3:6], axis=1)
+    
+    # Angular error: rotation angle between q_true and q_est
+    # angle = 2 * arccos(|dot(q_est, q_true)|)
+    q_true = results.states[:, 6:10]
+    q_est = mu_arr[:, 6:10]
+    dot_prod = np.abs(np.sum(q_true * q_est, axis=1))
+    dot_prod = np.clip(dot_prod, -1, 1)
+    att_error = 2 * np.arccos(dot_prod) * 180 / np.pi  # degrees
+    
+    # Angular rate error
+    w_error = mu_arr[:, 10:13] - results.states[:, 10:13]
+    w_norms = np.linalg.norm(w_error, axis=1) * 180 / np.pi  # deg/s
+    
+    fig, axes = plt.subplots(2, 2, figsize=(18, 8))
+    fig.suptitle(f"EKF Error Analysis: {case_name}", fontsize=14, fontweight='bold')
+    
+    # Position error (log scale)
+    pos_error_x = mu_arr[:, 0] - results.states[:, 0]
+    pos_error_y = mu_arr[:, 1] - results.states[:, 1]
+    pos_error_z = mu_arr[:, 2] - results.states[:, 2]
+    
+    axes[0, 0].semilogy(t_arr, np.abs(pos_error_x) + 0.1, label='X', linewidth=1.5)
+    axes[0, 0].semilogy(t_arr, np.abs(pos_error_y) + 0.1, label='Y', linewidth=1.5)
+    axes[0, 0].semilogy(t_arr, np.abs(pos_error_z) + 0.1, label='Z', linewidth=1.5)
+    axes[0, 0].set_ylabel('Error (m, log scale)')
+    axes[0, 0].set_title('Position Error')
+    axes[0, 0].grid(alpha=0.3, which='both')
+    axes[0, 0].legend(loc='best')
+    
+    # Velocity error (log scale)
+    axes[0, 1].semilogy(t_arr, np.abs(vel_error_x) + 1e-4, label='Vx', linewidth=1.5)
+    axes[0, 1].semilogy(t_arr, np.abs(vel_error_y) + 1e-4, label='Vy', linewidth=1.5)
+    axes[0, 1].semilogy(t_arr, np.abs(vel_error_z) + 1e-4, label='Vz', linewidth=1.5)
+    axes[0, 1].set_ylabel('Error (m/s, log scale)')
+    axes[0, 1].set_title('Velocity Error')
+    axes[0, 1].grid(alpha=0.3, which='both')
+    axes[0, 1].legend(loc='best')
+    
+    # Attitude error (degrees)
+    axes[1, 0].semilogy(t_arr, np.maximum(att_error, 1e-3), 'red', linewidth=2)
+    axes[1, 0].set_ylabel('Error (degrees, log scale)')
+    axes[1, 0].set_title('Attitude Error (Rotation Angle)')
+    axes[1, 0].grid(alpha=0.3, which='both')
+    
+    # Angular rate error (deg/s, log scale)
+    axes[1, 1].semilogy(t_arr, np.maximum(w_norms, 1e-3), 'blue', linewidth=2)
+    axes[1, 1].set_ylabel('Error (°/s, log scale)')
+    axes[1, 1].set_xlabel('Time (s)')
+    axes[1, 1].set_title('Angular Rate Error')
+    axes[1, 1].grid(alpha=0.3, which='both')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    
+    # Compute statistics
+    stats = {
+        'pos_final': np.linalg.norm(mu_arr[-1, 0:3] - results.states[-1, 0:3]),
+        'pos_max': np.max(pos_norms),
+        'pos_rms': np.sqrt(np.mean(pos_norms**2)),
+        
+        'vel_final': np.linalg.norm(mu_arr[-1, 3:6] - results.states[-1, 3:6]),
+        'vel_max': np.max(vel_norms),
+        'vel_rms': np.sqrt(np.mean(vel_norms**2)),
+        'vz_final': np.abs(vel_error_z[-1]),
+        
+        'att_final': att_error[-1],  # degrees
+        'att_max': np.max(att_error),
+        
+        'rate_final': w_norms[-1],  # deg/s
+        'rate_max': np.max(w_norms),
+    }
+    
+    # Print summary
+    print(f"\n{'='*60}")
+    print(f"EKF ERROR ANALYSIS: {case_name}")
+    print(f"{'='*60}")
+    print(f"\nPosition Error (m):")
+    print(f"  Final:   {stats['pos_final']:8.2f}")
+    print(f"  Max:     {stats['pos_max']:8.2f}")
+    print(f"  RMS:     {stats['pos_rms']:8.2f}")
+    
+    print(f"\nVelocity Error (m/s):")
+    print(f"  Final:   {stats['vel_final']:8.4f}")
+    print(f"  Max:     {stats['vel_max']:8.4f}")
+    print(f"  RMS:     {stats['vel_rms']:8.4f}")
+    print(f"  Vz only: {stats['vz_final']:8.4f}")
+    
+    print(f"\nAttitude Error (degrees):")
+    print(f"  Final:   {stats['att_final']:8.4f}°")
+    print(f"  Max:     {stats['att_max']:8.4f}°")
+    
+    print(f"\nAngular Rate Error (°/s):")
+    print(f"  Final:   {stats['rate_final']:8.4f}")
+    print(f"  Max:     {stats['rate_max']:8.4f}")
+    
+    print(f"\nTrajectory: {len(t_arr)} steps, {t_arr[-1]:.1f}s total")
+    print(f"{'='*60}\n")
+    
+    return fig, stats

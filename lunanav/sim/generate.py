@@ -78,8 +78,8 @@ def generate_measurements(states: np.ndarray, env_arr: list[SensorEnvironment], 
     """Generate clean and noisy measurements for all timesteps.
 
     Returns:
-        measurements_clean: {SensorName -> [n_steps, meas_dim]}
-        measurements_noisy: {SensorName -> [n_steps, meas_dim]}
+        measurements_clean: {str -> [n_steps, meas_dim]}
+        measurements_noisy: {str -> [n_steps, meas_dim]}
     """
     n_steps = len(env_arr)
     measurements_clean = {}
