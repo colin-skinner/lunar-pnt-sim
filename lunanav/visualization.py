@@ -1,12 +1,14 @@
 import numpy as np
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 from numpy.linalg import svd
+from pathlib import Path
 import jax
 import jax.numpy as jnp
 from .sim.quaternion import quat_apply, unitize_state
 from .constants import R_MOON
-from .sim.sensors import SensorName, SensorSuite
+from .sim.sensors import SensorSuite
 from .estimation.ekf import ekf_predict_state_only
 
 # Define specific colors
@@ -263,48 +265,77 @@ def visualize_trajectory(
 
     return fig
 
-def plot_accelerometer(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
-    axes_labels = ['X (Body)', 'Y (Body)', 'Z (Body)']
+# def plot_accelerometer(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+#     fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
+#     axes_labels = ['X (Body)', 'Y (Body)', 'Z (Body)']
+#     colors = ['#e74c3c', '#3498db', '#2ecc71']
+
+#     for ax, dim, label, color in zip(axes, range(3), axes_labels, colors):
+#         ax.plot(results.t, measurements_clean[sensor_name.ACCELEROMETER][:, dim], color=color, linewidth=2.5, label='True')
+#         ax.scatter(results.t, measurements_noisy[sensor_name.ACCELEROMETER][:, dim], s=8, alpha=0.4, color=color, label='Noisy')
+#         ax.set_ylabel(f'{label}\n(m/s²)', fontsize=11, fontweight='bold')
+#         ax.grid(True, alpha=0.2, linestyle='--')
+#         ax.legend(loc='upper right', fontsize=9)
+
+#     axes[-1].set_xlabel('Time (s)', fontsize=11)
+#     fig.suptitle('Accelerometer Measurements', fontsize=13, fontweight='bold', y=0.995)
+#     plt.tight_layout()
+#     return fig
+
+
+def plot_accelerometer(measurements_clean, measurements_noisy, results):
+    fig, ax = plt.subplots(figsize=(14, 5))
+    
+    dim_labels = ['X (Body)', 'Y (Body)', 'Z (Body)']
     colors = ['#e74c3c', '#3498db', '#2ecc71']
-
-    for ax, dim, label, color in zip(axes, range(3), axes_labels, colors):
-        ax.plot(results.t, measurements_clean[sensor_name.ACCELEROMETER][:, dim], color=color, linewidth=2.5, label='True')
-        ax.scatter(results.t, measurements_noisy[sensor_name.ACCELEROMETER][:, dim], s=8, alpha=0.4, color=color, label='Noisy')
-        ax.set_ylabel(f'{label}\n(m/s²)', fontsize=11, fontweight='bold')
-        ax.grid(True, alpha=0.2, linestyle='--')
-        ax.legend(loc='upper right', fontsize=9)
-
-    axes[-1].set_xlabel('Time (s)', fontsize=11)
-    fig.suptitle('Accelerometer Measurements', fontsize=13, fontweight='bold', y=0.995)
-    plt.tight_layout()
+    
+    for dim, label, color in zip(range(3), dim_labels, colors):
+        ax.plot(results.t, measurements_clean["accelerometer"][:, dim], 
+                color=color, linewidth=2.5, label=f'{label}', linestyle='-')
+        ax.scatter(results.t, measurements_noisy["accelerometer"][:, dim], 
+                   s=5, alpha=0.3, color=color)
+    
+    ax.set_xlabel('Time (s)', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Acceleration (m/s²)', fontsize=11, fontweight='bold')
+    ax.set_title('Accelerometer Measurements', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    ax.legend(loc='best', fontsize=9, ncol=2)
+    
+    fig.tight_layout()
     return fig
 
-def plot_gyroscope(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, axes = plt.subplots(3, 1, figsize=(14, 8), sharex=True)
-    axes_labels = ['X (Body Roll)', 'Y (Body Pitch)', 'Z (Body Yaw)']
+
+def plot_gyroscope(measurements_clean, measurements_noisy, results):
+    fig, ax = plt.subplots(figsize=(14, 5))
+    
+    dim_labels = ['X (Body Roll)', 'Y (Body Pitch)', 'Z (Body Yaw)']
     colors = ['#e74c3c', '#3498db', '#2ecc71']
-
-    for ax, dim, label, color in zip(axes, range(3), axes_labels, colors):
-        ax.plot(results.t, measurements_clean[sensor_name.GYROSCOPE][:, dim], color=color, linewidth=2.5, label='True')
-        ax.scatter(results.t, measurements_noisy[sensor_name.GYROSCOPE][:, dim], s=8, alpha=0.4, color=color, label='Noisy')
-        ax.set_ylabel(f'{label}\n(rad/s)', fontsize=11, fontweight='bold')
-        ax.grid(True, alpha=0.2, linestyle='--')
-        ax.legend(loc='upper right', fontsize=9)
-
-    axes[-1].set_xlabel('Time (s)', fontsize=11)
-    fig.suptitle('Gyroscope Measurements', fontsize=13, fontweight='bold', y=0.995)
-    plt.tight_layout()
+    
+    for dim, label, color in zip(range(3), dim_labels, colors):
+        ax.plot(results.t, measurements_clean["gyroscope"][:, dim], 
+                color=color, linewidth=2.5, label=f'{label}', linestyle='-')
+        ax.scatter(results.t, measurements_noisy["gyroscope"][:, dim], 
+                   s=5, alpha=0.3, color=color)
+    
+    ax.set_xlabel('Time (s)', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Angular Velocity (rad/s)', fontsize=11, fontweight='bold')
+    ax.set_title('Gyroscope Measurements', fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    ax.legend(loc='best', fontsize=9, ncol=2)
+    
+    fig.tight_layout()
     return fig
 
-def plot_laser_altimeter(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+
+
+def plot_laser_altimeter(measurements_clean, measurements_noisy, results):
     fig, ax = plt.subplots(figsize=(14, 5))
     colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12']
 
     for beam in range(4):
-        ax.plot(results.t, measurements_clean[sensor_name.LASER_ALTIMETER][:, beam],
-                color=colors[beam], linewidth=2.5, label=f'Beam {beam} (clean)', alpha=0.9)
-        ax.scatter(results.t, measurements_noisy[sensor_name.LASER_ALTIMETER][:, beam],
+        ax.plot(results.t, measurements_clean["laser_altimeter"][:, beam],
+                color=colors[beam], linewidth=2.5, label=f'Beam {beam}', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy["laser_altimeter"][:, beam],
                   s=5, alpha=0.15, color=colors[beam])
 
     ax.set_xlabel('Time (s)', fontsize=11)
@@ -315,14 +346,14 @@ def plot_laser_altimeter(measurements_clean, measurements_noisy, results, sensor
     plt.tight_layout()
     return fig
 
-def plot_laser_velocity(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+def plot_laser_velocity(measurements_clean, measurements_noisy, results):
     fig, ax = plt.subplots(figsize=(14, 5))
     colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12']
 
     for beam in range(4):
-        ax.plot(results.t, measurements_clean[sensor_name.LASER_VELOCITY][:, beam],
-                color=colors[beam], linewidth=2.5, label=f'Beam {beam} (clean)', alpha=0.9)
-        ax.scatter(results.t, measurements_noisy[sensor_name.LASER_VELOCITY][:, beam],
+        ax.plot(results.t, measurements_clean["laser_velocity"][:, beam],
+                color=colors[beam], linewidth=2.5, label=f'Beam {beam}', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy["laser_velocity"][:, beam],
                   s=5, alpha=0.15, color=colors[beam])
 
     ax.set_xlabel('Time (s)', fontsize=11)
@@ -334,35 +365,38 @@ def plot_laser_velocity(measurements_clean, measurements_noisy, results, sensor_
     plt.tight_layout()
     return fig
 
-def plot_star_tracker(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
-    fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
+def plot_star_tracker(measurements_clean, measurements_noisy, results):
+    # fig, axes = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
+    fig, ax = plt.subplots(figsize=(14, 5))
+
     labels = ['q0 (scalar)', 'q1 (x)', 'q2 (y)', 'q3 (z)']
     colors = ['#9b59b6', '#e74c3c', '#3498db', '#2ecc71']
 
-    for ax, dim, label, color in zip(axes, range(4), labels, colors):
-        ax.plot(results.t, measurements_clean[sensor_name.STAR_TRACKER][:, dim],
-                color=color, linewidth=2.5, label='True')
-        ax.scatter(results.t, measurements_noisy[sensor_name.STAR_TRACKER][:, dim],
-                  s=8, alpha=0.3, color=color, label='Noisy')
-        ax.set_ylabel(label, fontsize=11, fontweight='bold')
-        ax.grid(True, alpha=0.2, linestyle='--')
-        ax.axhline(0, color='k', linestyle='--', alpha=0.2)
-        ax.legend(loc='upper right', fontsize=9)
+    for dim, label, color in zip(range(4), labels, colors):
+        ax.plot(results.t, measurements_clean["star_tracker"][:, dim],
+                color=color, linewidth=2.5, label=label)
+        ax.scatter(results.t, measurements_noisy["star_tracker"][:, dim],
+                  s=8, alpha=0.3, color=color)
+        
+    # ax.set_ylabel(label, fontsize=11, fontweight='bold')
+    ax.grid(True, alpha=0.2, linestyle='--')
+    ax.axhline(0, color='k', linestyle='--', alpha=0.2)
+    ax.legend(loc='upper right', fontsize=9)
 
-    axes[-1].set_xlabel('Time (s)', fontsize=11)
+    # axes[-1].set_xlabel('Time (s)', fontsize=11)
     fig.suptitle('Star Tracker - Quaternion Attitude Measurements', fontsize=13, fontweight='bold', y=0.995)
     plt.tight_layout()
     return fig
 
-def plot_doppler(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+def plot_doppler(measurements_clean, measurements_noisy, results):
     fig, ax = plt.subplots(figsize=(14, 5))
-    n_sats = measurements_clean[sensor_name.DOPPLER].shape[1]
+    n_sats = measurements_clean["doppler"].shape[1]
     colors = plt.cm.tab10(np.linspace(0, 1, n_sats))
 
     for sat in range(n_sats):
-        ax.plot(results.t, measurements_clean[sensor_name.DOPPLER][:, sat],
-                color=colors[sat], linewidth=2.5, label=f'Sat {sat} (clean)', alpha=0.9)
-        ax.scatter(results.t, measurements_noisy[sensor_name.DOPPLER][:, sat],
+        ax.plot(results.t, measurements_clean["doppler"][:, sat],
+                color=colors[sat], linewidth=2.5, label=f'Sat {sat}', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy["doppler"][:, sat],
                   s=5, alpha=0.15, color=colors[sat])
 
     ax.set_xlabel('Time (s)', fontsize=11)
@@ -374,15 +408,15 @@ def plot_doppler(measurements_clean, measurements_noisy, results, sensor_name: S
     plt.tight_layout()
     return fig
 
-def plot_range_tracker(measurements_clean, measurements_noisy, results, sensor_name: SensorName):
+def plot_range_tracker(measurements_clean, measurements_noisy, results):
     fig, ax = plt.subplots(figsize=(14, 5))
-    n_sats = measurements_clean[sensor_name.RANGE_TRACKER].shape[1]
+    n_sats = measurements_clean["range_tracker"].shape[1]
     colors = plt.cm.tab10(np.linspace(0, 1, n_sats))
 
     for sat in range(n_sats):
-        ax.plot(results.t, measurements_clean[sensor_name.RANGE_TRACKER][:, sat],
-                color=colors[sat], linewidth=2.5, label=f'Sat {sat} (clean)', alpha=0.9)
-        ax.scatter(results.t, measurements_noisy[sensor_name.RANGE_TRACKER][:, sat],
+        ax.plot(results.t, measurements_clean["range_tracker"][:, sat],
+                color=colors[sat], linewidth=2.5, label=f'Sat {sat}', alpha=0.9)
+        ax.scatter(results.t, measurements_noisy["range_tracker"][:, sat],
                   s=5, alpha=0.15, color=colors[sat])
 
     ax.set_xlabel('Time (s)', fontsize=11)
@@ -396,21 +430,27 @@ def plot_range_tracker(measurements_clean, measurements_noisy, results, sensor_n
 def plot_measurements(measurements_clean, measurements_noisy, results, sensor_suite: SensorSuite):
     """Plot only the sensors that are in the suite"""
     plotters = {
-        SensorName.ACCELEROMETER: plot_accelerometer,
-        SensorName.GYROSCOPE: plot_gyroscope,
-        SensorName.LASER_ALTIMETER: plot_laser_altimeter,
-        SensorName.LASER_VELOCITY: plot_laser_velocity,
-        SensorName.STAR_TRACKER: plot_star_tracker,
-        SensorName.DOPPLER: plot_doppler,
-        SensorName.RANGE_TRACKER: plot_range_tracker,
+        "accelerometer": plot_accelerometer,
+        "gyroscope": plot_gyroscope,
+        "laser_altimeter": plot_laser_altimeter,
+        "laser_velocity": plot_laser_velocity,
+        "star_tracker": plot_star_tracker,
+        "doppler": plot_doppler,
+        "range_tracker": plot_range_tracker,
     }
-    
+
+    print("Sensors in suite:", list(sensor_suite.sensors.keys()))  # debug
+    print(type(list(sensor_suite.sensors.keys())[0]))
+    print()
+
     figs = []
     for sensor_name, plotter in plotters.items():
-        if sensor_name in sensor_suite.sensors:
-            fig = plotter(measurements_clean, measurements_noisy, results, sensor_name)
+        # print(type(sensor_name))
+        # if sensor_name in sensor_suite.sensors:
+            fig = plotter(measurements_clean, measurements_noisy, results)
             figs.append(fig)
             plt.show()
+            print(f"Plotting {sensor_name}")
     
     return figs
 
@@ -665,3 +705,287 @@ def obsv_verbose(x, sensor_suite: SensorSuite, a_m, w_m, Q, sim, env, h=3, show_
         plt.legend()
         plt.show()
 
+
+
+def plot_satellites_3d_plotly(sats, lander_position=None, figsize=(1200, 1000)):
+    """Interactive 3D Plotly plot of satellite orbits and optional lander trajectory."""
+    fig = go.Figure()
+    fig.add_trace(moon_surface(radius=R_MOON, offset=np.zeros(3), resolution=30, color='#444444'))
+
+    sat_colors = ['#e74c3c', '#3498db', '#2ecc71']
+
+    for i, sat in enumerate(sats):
+        c = sat_colors[i % len(sat_colors)]
+        fig.add_trace(go.Scatter3d(
+            x=sat.r[:, 0], y=sat.r[:, 1], z=sat.r[:, 2],
+            mode='lines', name=f'Satellite {i} Orbit',
+            line=dict(color=c, width=4),
+        ))
+        fig.add_trace(go.Scatter3d(
+            x=[sat.r[0, 0]], y=[sat.r[0, 1]], z=[sat.r[0, 2]],
+            mode='markers', marker=dict(size=10, color=c, symbol='circle'),
+            name=f'Sat {i} Start', showlegend=False,
+        ))
+        fig.add_trace(go.Scatter3d(
+            x=[sat.r[-1, 0]], y=[sat.r[-1, 1]], z=[sat.r[-1, 2]],
+            mode='markers', marker=dict(size=10, color=c, symbol='square'),
+            name=f'Sat {i} End', showlegend=False,
+        ))
+
+    if lander_position is not None:
+        fig.add_trace(go.Scatter3d(
+            x=lander_position[:, 0], y=lander_position[:, 1], z=lander_position[:, 2],
+            mode='lines', name='Lander Trajectory',
+            line=dict(color='#9b59b6', width=5, dash='dash'),
+        ))
+        fig.add_trace(go.Scatter3d(
+            x=[lander_position[0, 0]], y=[lander_position[0, 1]], z=[lander_position[0, 2]],
+            mode='markers', marker=dict(size=12, color='#9b59b6', symbol='diamond'),
+            name='Lander Start', showlegend=False,
+        ))
+
+    all_coords = np.vstack([sat.r for sat in sats] + ([lander_position] if lander_position is not None else []))
+    max_range = max(np.max(np.abs(all_coords)) * 1.2, R_MOON * 1.5)
+
+    fig.update_layout(
+        title='<b>Satellite Orbits & Lander Trajectory</b>',
+        scene=dict(
+            xaxis=dict(title='X (m)', range=[-max_range, max_range]),
+            yaxis=dict(title='Y (m)', range=[-max_range, max_range]),
+            zaxis=dict(title='Z (m)', range=[-max_range, max_range]),
+            aspectmode='cube',
+        ),
+        width=figsize[0], height=figsize[1],
+    )
+    return fig
+
+
+def plot_filter_uncertainty_diag(Sigma_arr, t, figsize=(15, 10), use_variance=False) -> Figure:
+    """Plot diagonal of EKF covariance matrix (std dev or variance) over time."""
+    n_steps = len(Sigma_arr)
+    pos_diag     = np.array([np.diag(Sigma_arr[i,  0:3,  0:3]) for i in range(n_steps)])
+    vel_diag     = np.array([np.diag(Sigma_arr[i,  3:6,  3:6]) for i in range(n_steps)])
+    att_diag     = np.array([np.diag(Sigma_arr[i, 6:10, 6:10]) for i in range(n_steps)])
+    ang_vel_diag = np.array([np.diag(Sigma_arr[i, 10:13, 10:13]) for i in range(n_steps)])
+
+    if not use_variance:
+        pos_diag, vel_diag, att_diag, ang_vel_diag = (
+            np.sqrt(pos_diag), np.sqrt(vel_diag), np.sqrt(att_diag), np.sqrt(ang_vel_diag))
+
+    metric = 'Variance' if use_variance else 'Std Dev'
+    fig, axs = plt.subplots(2, 2, figsize=figsize)
+    fig.suptitle('EKF Covariance Diagonal Elements Over Time', fontsize=14, fontweight='bold')
+
+    axs[0, 0].semilogy(t, pos_diag[:, 0], 'r-', label='X', linewidth=2)
+    axs[0, 0].semilogy(t, pos_diag[:, 1], 'g-', label='Y', linewidth=2)
+    axs[0, 0].semilogy(t, pos_diag[:, 2], 'b-', label='Z', linewidth=2)
+    axs[0, 0].set_ylabel(f'{metric} (m{"²" if use_variance else ""})', fontsize=10)
+    axs[0, 0].set_title('Position', fontsize=11, fontweight='bold')
+    axs[0, 0].grid(alpha=0.3, which='both'); axs[0, 0].legend(fontsize=9)
+
+    axs[0, 1].semilogy(t, vel_diag[:, 0], 'r-', label='VX', linewidth=2)
+    axs[0, 1].semilogy(t, vel_diag[:, 1], 'g-', label='VY', linewidth=2)
+    axs[0, 1].semilogy(t, vel_diag[:, 2], 'b-', label='VZ', linewidth=2)
+    axs[0, 1].set_ylabel(f'{metric} (m/s{"" if not use_variance else "²/s²"})', fontsize=10)
+    axs[0, 1].set_title('Velocity', fontsize=11, fontweight='bold')
+    axs[0, 1].grid(alpha=0.3, which='both'); axs[0, 1].legend(fontsize=9)
+
+    axs[1, 0].semilogy(t, att_diag[:, 0], 'r-', label='q0', linewidth=2)
+    axs[1, 0].semilogy(t, att_diag[:, 1], 'g-', label='q1', linewidth=2)
+    axs[1, 0].semilogy(t, att_diag[:, 2], 'b-', label='q2', linewidth=2)
+    axs[1, 0].semilogy(t, att_diag[:, 3], color='orange', label='q3', linewidth=2)
+    axs[1, 0].set_ylabel(metric, fontsize=10); axs[1, 0].set_xlabel('Time (s)', fontsize=10)
+    axs[1, 0].set_title('Attitude (Quaternion)', fontsize=11, fontweight='bold')
+    axs[1, 0].grid(alpha=0.3, which='both'); axs[1, 0].legend(fontsize=9)
+
+    axs[1, 1].semilogy(t, ang_vel_diag[:, 0], 'r-', label='ωX', linewidth=2)
+    axs[1, 1].semilogy(t, ang_vel_diag[:, 1], 'g-', label='ωY', linewidth=2)
+    axs[1, 1].semilogy(t, ang_vel_diag[:, 2], 'b-', label='ωZ', linewidth=2)
+    axs[1, 1].set_ylabel(f'{metric} (rad/s{"" if not use_variance else "²/s²"})', fontsize=10)
+    axs[1, 1].set_xlabel('Time (s)', fontsize=10)
+    axs[1, 1].set_title('Angular Velocity', fontsize=11, fontweight='bold')
+    axs[1, 1].grid(alpha=0.3, which='both'); axs[1, 1].legend(fontsize=9)
+
+    plt.tight_layout()
+    return fig
+
+def plot_sensor_config_comparison(results_list, t, dropout_times = None, undropout_times = None, alpha = 1):
+    """Plot position, velocity, and attitude errors for all sensor configurations."""
+    fig, axs = plt.subplots(1, 3, figsize=(18, 5))
+    fig.suptitle('EKF Error Comparison Across Sensor Configurations', fontsize=14, fontweight='bold')
+    
+    colors = plt.cm.tab10(np.linspace(0, 1, len(results_list)))
+    
+    for i, result in enumerate(results_list):
+        axs[0].semilogy(t, result['pos_error'], label=result['name'], color=colors[i], linewidth=2,alpha=alpha)
+    axs[0].set_xlabel('Time (s)', fontsize=11)
+    axs[0].set_ylabel('Position Error (m)', fontsize=11)
+    axs[0].set_title('Position Error', fontsize=12, fontweight='bold')
+    axs[0].grid(True, alpha=0.3, which='both')
+    axs[0].legend(fontsize=9, loc='best')
+    
+    for i, result in enumerate(results_list):
+        axs[1].semilogy(t, result['vel_error'], label=result['name'], color=colors[i], linewidth=2,alpha=alpha)
+    axs[1].set_xlabel('Time (s)', fontsize=11)
+    axs[1].set_ylabel('Velocity Error (m/s)', fontsize=11)
+    axs[1].set_title('Velocity Error', fontsize=12, fontweight='bold')
+    axs[1].grid(True, alpha=0.3, which='both')
+    axs[1].legend(fontsize=9, loc='best')
+    
+    for i, result in enumerate(results_list):
+        axs[2].semilogy(t, result['att_error'], label=result['name'], color=colors[i], linewidth=2,alpha=alpha)
+    axs[2].set_xlabel('Time (s)', fontsize=11)
+    axs[2].set_ylabel('Attitude Error', fontsize=11)
+    axs[2].set_title('Attitude Error', fontsize=12, fontweight='bold')
+    axs[2].grid(True, alpha=0.3, which='both')
+    axs[2].legend(fontsize=9, loc='best')
+
+    dropout_times = [] if dropout_times is None else dropout_times
+    undropout_times = [] if undropout_times is None else undropout_times
+    for i in range(3):
+        for t_ in dropout_times:
+            axs[i].axvline(t_, linestyle="-.", color="tab:red", alpha=0.6)
+        for t_ in undropout_times:
+            axs[i].axvline(t_, linestyle="-.", color="tab:green", alpha=0.6)
+    
+    plt.tight_layout()
+    
+    print("\n" + "="*80)
+    print("SENSOR CONFIGURATION COMPARISON - FINAL ERROR METRICS")
+    print("="*80)
+    for result in results_list:
+        pos_final = result['pos_error'][-1]
+        vel_final = result['vel_error'][-1]
+        att_final = result['att_error'][-1]
+        pos_mean = np.mean(result['pos_error'][-100:])
+        vel_mean = np.mean(result['vel_error'][-100:])
+        print(f"\n{result['name']:25s} | {result['description']}")
+        print(f"  Position - Final: {pos_final:8.2f} m  | Mean(last): {pos_mean:8.2f} m")
+        print(f"  Velocity - Final: {vel_final:8.4f} m/s | Mean(last): {vel_mean:8.4f} m/s")
+        print(f"  Attitude - Final: {att_final:8.4f}")
+
+    return fig
+def analyze_ekf_error(results, mu_arr, t_arr, case_name="EKF Performance", save_path=None):
+    """
+    Streamlined EKF error analysis: position, velocity, attitude, angular rate.
+    
+    Args:
+        results: SimResults object with .states, .t
+        mu_arr: [N, 13] array of state estimates from EKF
+        t_arr: [N] time array
+        case_name: str for figure title
+        save_path: optional path to save figure
+    
+    Returns:
+        fig: matplotlib figure
+        stats: dict with error metrics
+    """
+    
+    # Component-wise errors
+    vel_error_x = mu_arr[:, 3] - results.states[:, 3]
+    vel_error_y = mu_arr[:, 4] - results.states[:, 4]
+    vel_error_z = mu_arr[:, 5] - results.states[:, 5]
+    
+    pos_norms = np.linalg.norm(mu_arr[:, 0:3] - results.states[:, 0:3], axis=1)
+    vel_norms = np.linalg.norm(mu_arr[:, 3:6] - results.states[:, 3:6], axis=1)
+    
+    # Angular error: rotation angle between q_true and q_est
+    # angle = 2 * arccos(|dot(q_est, q_true)|)
+    q_true = results.states[:, 6:10]
+    q_est = mu_arr[:, 6:10]
+    dot_prod = np.abs(np.sum(q_true * q_est, axis=1))
+    dot_prod = np.clip(dot_prod, -1, 1)
+    att_error = 2 * np.arccos(dot_prod) * 180 / np.pi  # degrees
+    
+    # Angular rate error
+    w_error = mu_arr[:, 10:13] - results.states[:, 10:13]
+    w_norms = np.linalg.norm(w_error, axis=1) * 180 / np.pi  # deg/s
+    
+    fig, axes = plt.subplots(2, 2, figsize=(18, 8))
+    fig.suptitle(f"EKF Error Analysis: {case_name}", fontsize=14, fontweight='bold')
+    
+    # Position error (log scale)
+    pos_error_x = mu_arr[:, 0] - results.states[:, 0]
+    pos_error_y = mu_arr[:, 1] - results.states[:, 1]
+    pos_error_z = mu_arr[:, 2] - results.states[:, 2]
+    
+    axes[0, 0].semilogy(t_arr, np.abs(pos_error_x) + 0.1, label='X', linewidth=1.5)
+    axes[0, 0].semilogy(t_arr, np.abs(pos_error_y) + 0.1, label='Y', linewidth=1.5)
+    axes[0, 0].semilogy(t_arr, np.abs(pos_error_z) + 0.1, label='Z', linewidth=1.5)
+    axes[0, 0].set_ylabel('Error (m, log scale)')
+    axes[0, 0].set_title('Position Error')
+    axes[0, 0].grid(alpha=0.3, which='both')
+    axes[0, 0].legend(loc='best')
+    
+    # Velocity error (log scale)
+    axes[0, 1].semilogy(t_arr, np.abs(vel_error_x) + 1e-4, label='Vx', linewidth=1.5)
+    axes[0, 1].semilogy(t_arr, np.abs(vel_error_y) + 1e-4, label='Vy', linewidth=1.5)
+    axes[0, 1].semilogy(t_arr, np.abs(vel_error_z) + 1e-4, label='Vz', linewidth=1.5)
+    axes[0, 1].set_ylabel('Error (m/s, log scale)')
+    axes[0, 1].set_title('Velocity Error')
+    axes[0, 1].grid(alpha=0.3, which='both')
+    axes[0, 1].legend(loc='best')
+    
+    # Attitude error (degrees)
+    axes[1, 0].semilogy(t_arr, np.maximum(att_error, 1e-3), 'red', linewidth=2)
+    axes[1, 0].set_ylabel('Error (degrees, log scale)')
+    axes[1, 0].set_title('Attitude Error (Rotation Angle)')
+    axes[1, 0].grid(alpha=0.3, which='both')
+    
+    # Angular rate error (deg/s, log scale)
+    axes[1, 1].semilogy(t_arr, np.maximum(w_norms, 1e-3), 'blue', linewidth=2)
+    axes[1, 1].set_ylabel('Error (°/s, log scale)')
+    axes[1, 1].set_xlabel('Time (s)')
+    axes[1, 1].set_title('Angular Rate Error')
+    axes[1, 1].grid(alpha=0.3, which='both')
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    
+    # Compute statistics
+    stats = {
+        'pos_final': np.linalg.norm(mu_arr[-1, 0:3] - results.states[-1, 0:3]),
+        'pos_max': np.max(pos_norms),
+        'pos_rms': np.sqrt(np.mean(pos_norms**2)),
+        
+        'vel_final': np.linalg.norm(mu_arr[-1, 3:6] - results.states[-1, 3:6]),
+        'vel_max': np.max(vel_norms),
+        'vel_rms': np.sqrt(np.mean(vel_norms**2)),
+        'vz_final': np.abs(vel_error_z[-1]),
+        
+        'att_final': att_error[-1],  # degrees
+        'att_max': np.max(att_error),
+        
+        'rate_final': w_norms[-1],  # deg/s
+        'rate_max': np.max(w_norms),
+    }
+    
+    # Print summary
+    print(f"\n{'='*60}")
+    print(f"EKF ERROR ANALYSIS: {case_name}")
+    print(f"{'='*60}")
+    print(f"\nPosition Error (m):")
+    print(f"  Final:   {stats['pos_final']:8.2f}")
+    print(f"  Max:     {stats['pos_max']:8.2f}")
+    print(f"  RMS:     {stats['pos_rms']:8.2f}")
+    
+    print(f"\nVelocity Error (m/s):")
+    print(f"  Final:   {stats['vel_final']:8.4f}")
+    print(f"  Max:     {stats['vel_max']:8.4f}")
+    print(f"  RMS:     {stats['vel_rms']:8.4f}")
+    print(f"  Vz only: {stats['vz_final']:8.4f}")
+    
+    print(f"\nAttitude Error (degrees):")
+    print(f"  Final:   {stats['att_final']:8.4f}°")
+    print(f"  Max:     {stats['att_max']:8.4f}°")
+    
+    print(f"\nAngular Rate Error (°/s):")
+    print(f"  Final:   {stats['rate_final']:8.4f}")
+    print(f"  Max:     {stats['rate_max']:8.4f}")
+    
+    print(f"\nTrajectory: {len(t_arr)} steps, {t_arr[-1]:.1f}s total")
+    print(f"{'='*60}\n")
+    
+    return fig, stats

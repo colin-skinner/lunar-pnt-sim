@@ -207,14 +207,6 @@ def linearize(f, s, u):
     A,B = jax.jacobian(f, argnums=(0,1))(s, u)
     return A, B
 
-# def linearized_lander_motion(state: jnp.ndarray, force_B: jnp.ndarray, torque_B: jnp.ndarray,
-#                           dt: float, mass: float, I: jnp.ndarray):
-#     return jax.jacfwd(lambda s, f, tau: lander_motion(s, f, tau, dt, mass, I))(state, force_B, torque_B)
-
-# def linearized_lander_motion_inertial(state: jnp.ndarray, force_I: jnp.ndarray, torque_B: jnp.ndarray,
-#                           dt: float, mass: float, I: jnp.ndarray):
-#     return jax.jacfwd(lambda s, f, tau: lander_motion_inertial(s, f, tau, dt, mass, I))(state, force_I, torque_B)
-
 def run_sim(state0, nsteps, dt, control_fn, params: SimParams):
     """Run the simulation forward in time.
 
